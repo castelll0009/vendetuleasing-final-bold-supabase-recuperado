@@ -1,0 +1,77 @@
+// Esquema de base de datos para "Vende tu Leasing"
+// Para usar en https://dbdiagram.io/
+
+Table usuarios {
+  id uuid [pk, note: 'Primary key - UUID generado por Supabase']
+  nombre varchar [not null, note: 'Nombre del usuario']
+  apellido varchar [not null, note: 'Apellido del usuario']
+  email varchar [unique, not null, note: 'Email único para autenticación']
+  telefono varchar [note: 'Número de teléfono']
+  password_hash varchar [not null, note: 'Hash de la contraseña']
+  rol varchar [not null, default: 'usuario', note: 'Rol: admin o usuario']
+  created_at timestamp [default: `now()`, note: 'Fecha de creación']
+  
+  indexes {
+    email
+    rol
+  }
+}
+
+Table inmuebles {
+  id uuid [pk, note: 'Primary key - UUID generado automáticamente']
+  usuario_id uuid [ref: > usuarios.id, not null, note: 'Usuario que publica el inmueble']
+  titulo varchar [not null, note: 'Título del inmueble']
+  descripcion text [note: 'Descripción detallada']
+  tipo varchar [not null, note: 'Tipo: casa, apartamento, leasing, etc']
+  precio numeric [not null, note: 'Precio del inmueble']
+  ciudad varchar [not null, note: 'Ciudad donde se ubica']
+  barrio varchar [note: 'Barrio o localidad']
+  estrato int [note: 'Estrato socioeconómico (1-6)']
+  area_m2 float [note: 'Área en metros cuadrados']
+  habitaciones int [note: 'Número de habitaciones']
+  banos int [note: 'Número de baños']
+  estado_publicacion varchar [not null, default: 'inactivo', note: 'Estado: activo o inactivo']
+  created_at timestamp [default: `now()`, note: 'Fecha de creación']
+  
+  indexes {
+    usuario_id
+    ciudad
+    tipo
+    precio
+    estado_publicacion
+    (ciudad, tipo, precio) [name: 'idx_search_filters']
+  }
+}
+
+Table parametros_credito {
+  id int [pk, increment, note: 'ID autoincrementable']
+  tasa_interes_anual numeric [not null, note: 'Tasa de interés anual (%)']
+  plazo_min_meses int [not null, note: 'Plazo mínimo en meses']
+  plazo_max_meses int [not null, note: 'Plazo máximo en meses']
+  porcentaje_cuota_inicial_min numeric [not null, note: 'Porcentaje mínimo de cuota inicial (%)']
+  created_at timestamp [default: `now()`, note: 'Fecha de creación']
+}
+
+// Relaciones
+Ref: inmuebles.usuario_id > usuarios.id [delete: cascade, note: 'Un usuario puede tener múltiples inmuebles']
+
+// Notas del esquema
+Note: '''
+# Modelo de Datos - Vende tu Leasing (Etapa 2)
+
+## Usuarios
+- Autenticación mediante Supabase Auth
+- Dos roles: 'admin' y 'usuario'
+- El admin puede ver todos los inmuebles
+- Los usuarios solo pueden gestionar sus propios inmuebles
+
+## Inmuebles
+- Cada inmueble pertenece a un usuario (usuario_id)
+- Solo los inmuebles con estado_publicacion='activo' aparecen en búsquedas públicas
+- Filtros de búsqueda: ciudad, tipo, precio, habitaciones, baños, estrato
+
+## Parámetros de Crédito
+- Configuración global para el simulador de crédito
+- Se usa el registro más reciente para los cálculos
+- Incluye: tasa de interés, plazos y cuota inicial mínima
+'''
