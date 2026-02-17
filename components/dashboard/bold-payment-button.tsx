@@ -65,7 +65,7 @@ export function BoldPaymentButton({
       const boldScript = document.createElement("script")
       boldScript.setAttribute("src", "https://checkout.bold.co/library/boldPaymentButton.js")
       boldScript.setAttribute("data-bold-button", "dark-S")
-      boldScript.setAttribute("data-api-key", "KeXJ3hJ1V7UuaTMGwFjFzMd679gFAaF3OEayjcd9OPA")
+      boldScript.setAttribute("data-api-key", process.env.NEXT_PUBLIC_BOLD_API_KEY || "_S59TNG_Q1EhO8m6ysuuZ-U4M4FOqbD8kTw6gsh1AsY")
       boldScript.setAttribute("data-order-id", orderId)
       boldScript.setAttribute("data-currency", currency)
       boldScript.setAttribute("data-amount", amount.toString())
