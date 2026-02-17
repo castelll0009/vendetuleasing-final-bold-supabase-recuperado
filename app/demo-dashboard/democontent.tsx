@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'  // opcional
 
-const API_KEY = 'KeXJ3hJ1V7UuaTMGwFjFzMd679gFAaF3OEayjcd9OPA'
-const SECRET_KEY = 'Pr1XTpBRgvHE3nvFmJEwLw'
+const API_KEY = '_S59TNG_Q1EhO8m6ysuuZ-U4M4FOqbD8kTw6gsh1AsY'
+const SECRET_KEY = 'qaWjO47IjeE03z6e90nFSw'
 const AMOUNT = 50000
 
 export default function DemoContent() {
@@ -39,7 +39,7 @@ export default function DemoContent() {
   // Generar hash SHA-256
   useEffect(() => {
     const generate = async () => {
-      const data = `${orderId}${AMOUNT}COP${SECRET_KEY}`
+      const data = `${orderId}${AMOUNT}COP${process.env.NEXT_PUBLIC_BOLD_API_SECRET}`
       const encoder = new TextEncoder()
       const buffer = encoder.encode(data)
       try {
@@ -69,7 +69,7 @@ export default function DemoContent() {
     const btn = document.createElement('script')
 
     btn.setAttribute('data-bold-button', 'dark-L')
-    btn.setAttribute('data-api-key', API_KEY)
+    btn.setAttribute('data-api-key', process.env.NEXT_PUBLIC_BOLD_API_KEY || API_KEY)
     btn.setAttribute('data-order-id', orderId)
     btn.setAttribute('data-amount', AMOUNT.toString())
     btn.setAttribute('data-currency', 'COP')

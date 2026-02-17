@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import DemoContent from './DemoContent'
+import DemoContent from '../demo-dashboard/democontent'
 
 export default function DemoDashboardPage() {
   return (
