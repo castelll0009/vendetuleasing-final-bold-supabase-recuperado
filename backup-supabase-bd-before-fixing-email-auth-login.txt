@@ -1,0 +1,126 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.payments (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  property_id uuid,
+  payment_type text NOT NULL CHECK (payment_type = ANY (ARRAY['publication'::text, 'featured'::text])),
+  amount numeric NOT NULL,
+  currency text DEFAULT 'COP'::text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text])),
+  bold_reference text,
+  bold_transaction_id text,
+  payment_method text,
+  metadata jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT payments_pkey PRIMARY KEY (id),
+  CONSTRAINT payments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT payments_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.properties(id)
+);
+CREATE TABLE public.price_alerts (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  property_type USER-DEFINED,
+  city text,
+  min_price numeric,
+  max_price numeric,
+  min_bedrooms integer,
+  max_bedrooms integer,
+  active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT price_alerts_pkey PRIMARY KEY (id),
+  CONSTRAINT price_alerts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  email text NOT NULL,
+  full_name text,
+  phone text,
+  avatar_url text,
+  role USER-DEFINED DEFAULT 'user'::user_role,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.properties (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  title text NOT NULL,
+  description text,
+  property_type USER-DEFINED NOT NULL,
+  status USER-DEFINED NOT NULL,
+  price numeric NOT NULL,
+  bedrooms integer,
+  bathrooms integer,
+  square_feet integer,
+  address text NOT NULL,
+  city text NOT NULL,
+  state text,
+  country text DEFAULT 'Colombia'::text,
+  zip_code text,
+  latitude numeric,
+  longitude numeric,
+  property_id_code text UNIQUE,
+  featured boolean DEFAULT false,
+  views integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  bank_id text,
+  bold_reference text,
+  bold_payment_url text,
+  bold_payment_status text DEFAULT 'pending'::text,
+  paid_at timestamp with time zone,
+  publication_status USER-DEFINED DEFAULT 'pending_payment'::property_publication_status,
+  is_featured_paid boolean DEFAULT false,
+  featured_until timestamp with time zone,
+  payment_reference text,
+  featured_payment_reference text,
+  CONSTRAINT properties_pkey PRIMARY KEY (id),
+  CONSTRAINT properties_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.property_amenities (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  property_id uuid NOT NULL,
+  amenity text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT property_amenities_pkey PRIMARY KEY (id),
+  CONSTRAINT property_amenities_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.properties(id)
+);
+CREATE TABLE public.property_images (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  property_id uuid NOT NULL,
+  image_url text NOT NULL,
+  is_primary boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT property_images_pkey PRIMARY KEY (id),
+  CONSTRAINT property_images_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.properties(id)
+);
+CREATE TABLE public.transactions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  wallet_id uuid NOT NULL,
+  amount numeric NOT NULL,
+  transaction_type USER-DEFINED NOT NULL,
+  transaction_status USER-DEFINED DEFAULT 'pending'::transaction_status,
+  description text,
+  property_id uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT transactions_wallet_id_fkey FOREIGN KEY (wallet_id) REFERENCES public.wallets(id),
+  CONSTRAINT transactions_property_id_fkey FOREIGN KEY (property_id) REFERENCES public.properties(id)
+);
+CREATE TABLE public.wallets (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL UNIQUE,
+  balance numeric DEFAULT 0.00,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT wallets_pkey PRIMARY KEY (id),
+  CONSTRAINT wallets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
