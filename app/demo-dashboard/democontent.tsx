@@ -11,7 +11,7 @@ import { toast } from 'sonner'  // opcional
 
 const API_KEY = 'KeXJ3hJ1V7UuaTMGwFjFzMd679gFAaF3OEayjcd9OPA'
 const SECRET_KEY = 'Pr1XTpBRgvHE3nvFmJEwLw'
-const AMOUNT = 50000
+const AMOUNT = 1000
 
 export default function DemoContent() {
   const searchParams = useSearchParams()
