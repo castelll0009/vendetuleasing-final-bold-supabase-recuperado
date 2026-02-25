@@ -160,7 +160,7 @@ export function PropertiesTable({ properties: initialProperties }: PropertiesTab
                                 <BoldPaymentButton
                                   propertyId={property.id}
                                   propertyTitle={property.title}
-                                  amount={50000}
+                                  amount={1000}
                                   paymentType="publication"
                                 />
                               )}

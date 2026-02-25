@@ -23,8 +23,8 @@ interface DashboardLayoutProps {
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Mis Propiedades", href: "/dashboard/properties", icon: Building2 },
-  { name: "Billetera", href: "/dashboard/wallet", icon: Wallet },
-  { name: "Alertas de Precios", href: "/dashboard/alerts", icon: Bell },
+  // { name: "Billetera", href: "/dashboard/wallet", icon: Wallet },
+  // { name: "Alertas de Precios", href: "/dashboard/alerts", icon: Bell },
   { name: "Configuración", href: "/dashboard/settings", icon: Settings },
 ]
 

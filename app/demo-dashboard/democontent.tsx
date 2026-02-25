@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'  // opcional
 
-const API_KEY = 'KeXJ3hJ1V7UuaTMGwFjFzMd679gFAaF3OEayjcd9OPA'
-const SECRET_KEY = 'Pr1XTpBRgvHE3nvFmJEwLw'
+const API_KEY =  process.env.NEXT_PUBLIC_BOLD_API_KEY
+const SECRET_KEY = process.env.NEXT_PUBLIC_BOLD_API_SECRET
 const AMOUNT = 1000
 
 export default function DemoContent() {
@@ -148,7 +148,7 @@ export default function DemoContent() {
             {status === 'pending' && (
               <div className="pt-4 border-t border-gray-800">
                 <p className="text-center mb-4">
-                  Paga <strong className="text-orange-400">50.000 COP</strong> para publicar
+                  Paga <strong className="text-orange-400">1000 COP</strong> para publicar
                 </p>
                 <div id="bold-button-container" className="min-h-[60px] flex justify-center">
                   {!signature && <Skeleton className="h-12 w-64 bg-gray-800" />}

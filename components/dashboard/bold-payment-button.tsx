@@ -22,9 +22,8 @@ export function BoldPaymentButton({
   const [signature, setSignature] = useState<string>("")
 
   // Valores del DEMO que FUNCIONA (temporal para pruebas)
-  const API_KEY = '_S59TNG_Q1EhO8m6ysuuZ-U4M4FOqbD8kTw6gsh1AsY'
-  const SECRET_KEY = 'qaWjO47IjeE03z6e90nFSw'
-
+  const API_KEY = process.env.NEXT_PUBLIC_BOLD_API_KEY
+  const SECRET_KEY = process.env.NEXT_PUBLIC_BOLD_API_SECRET
   // orderId más simple y seguro (imita demo: sin guiones UUID)
   const orderId = `${paymentType.toUpperCase()}-${propertyId.replace(/-/g, '').slice(0, 8)}-${Date.now()}`
   const currency = "COP"
