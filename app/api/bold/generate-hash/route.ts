@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     // BOLD integrity hash: SHA-256 of orderId + amount + currency + secretKey
-    const secretKey = process.env.BOLD_SECRET_KEY
+    const secretKey = process.env.NEXT_PUBLIC_BOLD_API_SECRET
     if (!secretKey) {
       return NextResponse.json({ error: "Clave secreta de BOLD no configurada" }, { status: 500 })
     }

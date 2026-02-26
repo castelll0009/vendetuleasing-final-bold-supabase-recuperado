@@ -1,16 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, XCircle, Clock, Loader2 } from "lucide-react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
 
 type PaymentState = "loading" | "approved" | "rejected" | "pending" | "error"
 
-export default function PaymentResultPage() {
+function PaymentResultContent() {
   const searchParams = useSearchParams()
   const [state, setState] = useState<PaymentState>("loading")
   const [orderId, setOrderId] = useState<string | null>(null)
@@ -28,8 +27,8 @@ export default function PaymentResultPage() {
 
     const processResult = async () => {
       try {
-        // Call the webhook to update the payment status
-        const response = await fetch("/api/bold/webhook", {
+        // Call the verify-payment API (uses admin client, bypasses RLS)
+        const response = await fetch("/api/bold/verify-payment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -49,7 +48,7 @@ export default function PaymentResultPage() {
             setState("pending")
           }
         } else {
-          // Even if webhook fails, show user the correct status
+          // Even if API fails, show the correct status to the user
           setState(boldTxStatus === "approved" ? "approved" : boldTxStatus === "rejected" ? "rejected" : "pending")
         }
       } catch (err) {
@@ -71,7 +70,7 @@ export default function PaymentResultPage() {
     approved: {
       icon: <CheckCircle className="h-16 w-16 text-green-600" />,
       title: "Pago Exitoso",
-      description: "Tu pago ha sido procesado correctamente. Tu propiedad ha sido actualizada.",
+      description: "Tu pago ha sido procesado correctamente. Tu propiedad ya esta publicada y visible para todos.",
       color: "text-green-600",
     },
     rejected: {
@@ -83,7 +82,7 @@ export default function PaymentResultPage() {
     pending: {
       icon: <Clock className="h-16 w-16 text-amber-500" />,
       title: "Pago Pendiente",
-      description: "Tu pago esta siendo procesado. Te notificaremos cuando se confirme.",
+      description: "Tu pago esta siendo procesado. Te notificaremos cuando se confirme y tu propiedad sera publicada automaticamente.",
       color: "text-amber-500",
     },
     error: {
@@ -118,7 +117,14 @@ export default function PaymentResultPage() {
             </div>
 
             <div className="flex flex-col gap-3 w-full mt-4">
-              <Button asChild className="bg-accent hover:bg-accent/90 text-white">
+              {state === "approved" && (
+                <Button asChild className="bg-accent hover:bg-accent/90 text-white">
+                  <Link href="/properties">
+                    Ver Propiedades Publicadas
+                  </Link>
+                </Button>
+              )}
+              <Button asChild variant={state === "approved" ? "outline" : "default"} className={state === "approved" ? "bg-transparent" : "bg-accent hover:bg-accent/90 text-white"}>
                 <Link href="/dashboard/properties">
                   Ir a Mis Propiedades
                 </Link>
@@ -135,5 +141,26 @@ export default function PaymentResultPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function PaymentResultPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-12 max-w-lg">
+          <Card>
+            <CardContent className="p-8">
+              <div className="flex flex-col items-center text-center gap-6">
+                <Loader2 className="h-16 w-16 text-muted-foreground animate-spin" />
+                <p className="text-muted-foreground">Cargando...</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <PaymentResultContent />
+    </Suspense>
   )
 }

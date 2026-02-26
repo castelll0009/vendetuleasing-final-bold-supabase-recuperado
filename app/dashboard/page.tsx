@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
-import { RecentProperties } from "@/components/dashboard/recent-properties"
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
+import { DashboardQuickActions } from "@/components/dashboard/dashboard-quick-actions"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -15,27 +15,29 @@ export default async function DashboardPage() {
     redirect("/auth/login")
   }
 
-
-  
   // Get user profile
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
 
-  // Get user properties
+  // Get user properties with publication status
   const { data: properties } = await supabase
     .from("properties")
     .select("*, property_images(image_url, is_primary)")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
 
-  // Get wallet
-  const { data: wallet } = await supabase.from("wallets").select("*").eq("user_id", user.id).single()
+  const allProps = properties || []
 
   const stats = {
-    totalProperties: properties?.length || 0,
-    activeListings: properties?.filter((p) => p.status === "for_sale" || p.status === "for_rent").length || 0,
-    totalViews: properties?.reduce((sum, p) => sum + p.views, 0) || 0,
-    walletBalance: wallet?.balance || 0,
+    totalProperties: allProps.length,
+    publishedProperties: allProps.filter((p) => p.publication_status === "published").length,
+    pendingPayment: allProps.filter((p) => p.publication_status === "pending_payment" || !p.publication_status).length,
+    featuredProperties: allProps.filter(
+      (p) => p.is_featured_paid && p.featured_until && new Date(p.featured_until) > new Date()
+    ).length,
   }
+
+  // Get 3 most recent properties for the quick view
+  const recentProperties = allProps.slice(0, 3)
 
   return (
     <DashboardLayout user={user} profile={profile}>
@@ -46,7 +48,7 @@ export default async function DashboardPage() {
         </div>
 
         <DashboardStats stats={stats} />
-        <RecentProperties properties={properties || []} />
+        <DashboardQuickActions recentProperties={recentProperties} stats={stats} />
       </div>
     </DashboardLayout>
   )
