@@ -1,136 +1,166 @@
-'use client'
+"use client"
 
-import { useEffect, useState } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { useEffect, useState, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { CheckCircle, XCircle, Clock, Loader2 } from "lucide-react"
+import Link from "next/link"
 
-type PaymentState = 'loading' | 'success' | 'error' | 'pending' | 'rejected'
+type PaymentState = "loading" | "approved" | "rejected" | "pending" | "error"
 
-export default function PaymentResultPage() {
+function PaymentResultContent() {
   const searchParams = useSearchParams()
-  const router = useRouter()
-  const [state, setState] = useState<PaymentState>('loading')
-  const [message, setMessage] = useState('Procesando pago...')
+  const [state, setState] = useState<PaymentState>("loading")
+  const [orderId, setOrderId] = useState<string | null>(null)
 
   useEffect(() => {
-    const txStatus = searchParams.get('bold-tx-status')
-    const orderId = searchParams.get('bold-order-id') || searchParams.get('order-id') || ''
+    const boldOrderId = searchParams.get("bold-order-id") || searchParams.get("order-id")
+    const boldTxStatus = searchParams.get("bold-tx-status") || searchParams.get("status")
 
-    console.log('[PaymentResult] Parámetros:', { txStatus, orderId })
+    setOrderId(boldOrderId)
 
-    if (!txStatus || !orderId) {
-      setState('error')
-      setMessage('No se recibió información del pago.')
+    if (!boldOrderId) {
+      setState("error")
       return
     }
 
-    // Parseo simple y efectivo para tu formato real
-    let propertyId = ''
-    if (orderId.includes('-')) {
-      propertyId = orderId.split('-').slice(1).join('-') // quita prefijo PUBLICATION-
-    } else {
-      propertyId = orderId // si viene solo el UUID
-    }
-
-    console.log('[PaymentResult] ID extraído:', propertyId)
-
-    if (!propertyId) {
-      setState('error')
-      setMessage('No se pudo identificar la propiedad.')
-      return
-    }
-
-    const process = async () => {
-      const supabase = createClient()
-
+    const processResult = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error('No autenticado')
+        // Call the verify-payment API (uses admin client, bypasses RLS)
+        const response = await fetch("/api/bold/verify-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: boldOrderId,
+            status: boldTxStatus === "approved" ? "approved" : boldTxStatus === "rejected" ? "rejected" : "pending",
+            transaction_id: searchParams.get("bold-tx-id") || null,
+            payment_method: searchParams.get("bold-payment-method") || null,
+          }),
+        })
 
-        console.log('[PaymentResult] Usuario:', user.id)
-
-        // Buscar propiedad
-        const { data: prop, error: propErr } = await supabase
-          .from('properties')
-          .select('user_id')
-          .eq('id', propertyId)
-          .single()
-
-        if (propErr) throw new Error('Error buscando propiedad: ' + propErr.message)
-        if (!prop) throw new Error('Propiedad no encontrada')
-        if (prop.user_id !== user.id) throw new Error('Propiedad no pertenece al usuario')
-
-        console.log('[PaymentResult] Propiedad OK')
-
-        if (txStatus === 'approved') {
-          const { error: updateErr } = await supabase
-            .from('properties')
-            .update({
-              publication_status: 'published',
-              bold_payment_status: 'approved',
-              paid_at: new Date().toISOString(),
-            })
-            .eq('id', propertyId)
-
-          if (updateErr) throw new Error('Error actualizando: ' + updateErr.message)
-
-          console.log('[PaymentResult] Actualizado a published OK')
-
-          setState('success')
-          setMessage('¡Pago confirmado! Tu propiedad ya está publicada.')
-
-          setTimeout(() => router.push('/dashboard/properties'), 4000)
-        } else if (txStatus === 'rejected') {
-          setState('rejected')
-          setMessage('Pago rechazado.')
+        if (response.ok) {
+          if (boldTxStatus === "approved") {
+            setState("approved")
+          } else if (boldTxStatus === "rejected") {
+            setState("rejected")
+          } else {
+            setState("pending")
+          }
         } else {
-          setState('pending')
-          setMessage('Pago pendiente.')
+          // Even if API fails, show the correct status to the user
+          setState(boldTxStatus === "approved" ? "approved" : boldTxStatus === "rejected" ? "rejected" : "pending")
         }
-      } catch (err: any) {
-        console.error('[PaymentResult] ERROR:', err.message)
-        setState('error')
-        setMessage('Error al procesar: ' + (err.message || 'desconocido'))
+      } catch (err) {
+        console.error("[v0] Error processing payment result:", err)
+        setState(boldTxStatus === "approved" ? "approved" : "error")
       }
     }
 
-    process()
-  }, [searchParams, router])
+    processResult()
+  }, [searchParams])
 
-  const states = {
-    loading: { icon: <Loader2 className="h-16 w-16 animate-spin text-muted-foreground" />, title: 'Procesando...', color: 'text-muted-foreground' },
-    success: { icon: <CheckCircle className="h-16 w-16 text-green-600" />, title: '¡Éxito!', color: 'text-green-600' },
-    rejected: { icon: <XCircle className="h-16 w-16 text-destructive" />, title: 'Rechazado', color: 'text-destructive' },
-    pending: { icon: <Clock className="h-16 w-16 text-amber-500" />, title: 'Pendiente', color: 'text-amber-500' },
-    error: { icon: <XCircle className="h-16 w-16 text-destructive" />, title: 'Error', color: 'text-destructive' },
+  const configs = {
+    loading: {
+      icon: <Loader2 className="h-16 w-16 text-muted-foreground animate-spin" />,
+      title: "Procesando tu pago...",
+      description: "Por favor espera mientras confirmamos tu transaccion.",
+      color: "text-muted-foreground",
+    },
+    approved: {
+      icon: <CheckCircle className="h-16 w-16 text-green-600" />,
+      title: "Pago Exitoso",
+      description: "Tu pago ha sido procesado correctamente. Tu propiedad ya esta publicada y visible para todos.",
+      color: "text-green-600",
+    },
+    rejected: {
+      icon: <XCircle className="h-16 w-16 text-destructive" />,
+      title: "Pago Rechazado",
+      description: "Tu pago no pudo ser procesado. Por favor intenta nuevamente con otro metodo de pago.",
+      color: "text-destructive",
+    },
+    pending: {
+      icon: <Clock className="h-16 w-16 text-amber-500" />,
+      title: "Pago Pendiente",
+      description: "Tu pago esta siendo procesado. Te notificaremos cuando se confirme y tu propiedad sera publicada automaticamente.",
+      color: "text-amber-500",
+    },
+    error: {
+      icon: <XCircle className="h-16 w-16 text-destructive" />,
+      title: "Error",
+      description: "No pudimos procesar la informacion del pago. Contacta soporte si el problema persiste.",
+      color: "text-destructive",
+    },
   }
 
-  const current = states[state]
+  const config = configs[state]
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardContent className="p-8 text-center space-y-6">
-          {current.icon}
-          <h1 className={`text-3xl font-bold ${current.color}`}>{current.title}</h1>
-          <p className="text-lg">{message}</p>
+    <div className="container mx-auto px-4 py-12 max-w-lg">
+      <Card>
+        <CardContent className="p-8">
+          <div className="flex flex-col items-center text-center gap-6">
+            {config.icon}
 
-          <div className="flex flex-col gap-4 mt-8">
-            <Button asChild className="bg-accent hover:bg-accent/90 text-white">
-              <a href="/dashboard/properties">Ir a Mis Propiedades</a>
-            </Button>
+            <div className="space-y-2">
+              <h1 className={`text-2xl font-bold ${config.color}`}>
+                {config.title}
+              </h1>
+              <p className="text-muted-foreground">
+                {config.description}
+              </p>
+              {orderId && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Referencia: {orderId}
+                </p>
+              )}
+            </div>
 
-            {(state === 'rejected' || state === 'error') && (
-              <Button variant="outline" asChild>
-                <a href="/dashboard/properties/new">Intentar publicar de nuevo</a>
+            <div className="flex flex-col gap-3 w-full mt-4">
+              {state === "approved" && (
+                <Button asChild className="bg-accent hover:bg-accent/90 text-white">
+                  <Link href="/properties">
+                    Ver Propiedades Publicadas
+                  </Link>
+                </Button>
+              )}
+              <Button asChild variant={state === "approved" ? "outline" : "default"} className={state === "approved" ? "bg-transparent" : "bg-accent hover:bg-accent/90 text-white"}>
+                <Link href="/dashboard/properties">
+                  Ir a Mis Propiedades
+                </Link>
               </Button>
-            )}
+              {(state === "rejected" || state === "error") && (
+                <Button asChild variant="outline" className="bg-transparent">
+                  <Link href="/dashboard/properties">
+                    Intentar de Nuevo
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function PaymentResultPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-12 max-w-lg">
+          <Card>
+            <CardContent className="p-8">
+              <div className="flex flex-col items-center text-center gap-6">
+                <Loader2 className="h-16 w-16 text-muted-foreground animate-spin" />
+                <p className="text-muted-foreground">Cargando...</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <PaymentResultContent />
+    </Suspense>
   )
 }
