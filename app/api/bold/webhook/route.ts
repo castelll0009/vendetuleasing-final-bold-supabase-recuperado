@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { order_id, status, transaction_id, payment_method } = body
 
+    console.log("[BoldWebhook] Received:", { order_id, status, transaction_id, payment_method })
+
     if (!order_id || !status) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     // Update the payment record
     const { data: payment, error: paymentError } = await supabase
@@ -37,6 +39,8 @@ export async function POST(request: NextRequest) {
           .from("properties")
           .update({
             publication_status: "published",
+            bold_payment_status: "approved",
+            paid_at: new Date().toISOString(),
             payment_reference: order_id,
             updated_at: new Date().toISOString(),
           })

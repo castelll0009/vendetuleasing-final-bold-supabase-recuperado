@@ -13,21 +13,38 @@ function PaymentResultContent() {
   const searchParams = useSearchParams()
   const [state, setState] = useState<PaymentState>("loading")
   const [orderId, setOrderId] = useState<string | null>(null)
+  const [paymentType, setPaymentType] = useState<string | null>(null)
 
   useEffect(() => {
     const boldOrderId = searchParams.get("bold-order-id") || searchParams.get("order-id")
     const boldTxStatus = searchParams.get("bold-tx-status") || searchParams.get("status")
 
+    console.log("[PaymentResult] URL params:", {
+      boldOrderId,
+      boldTxStatus,
+      allParams: Object.fromEntries(searchParams.entries()),
+    })
+
     setOrderId(boldOrderId)
 
+    // Detect payment type from orderId prefix
+    if (boldOrderId) {
+      if (boldOrderId.startsWith("FEATURED-")) {
+        setPaymentType("featured")
+      } else if (boldOrderId.startsWith("PUBLICATION-")) {
+        setPaymentType("publication")
+      }
+    }
+
     if (!boldOrderId) {
+      console.error("[PaymentResult] No order ID found in URL params")
       setState("error")
       return
     }
 
     const processResult = async () => {
       try {
-        // Call the verify-payment API (uses admin client, bypasses RLS)
+        console.log("[PaymentResult] Calling verify-payment API...")
         const response = await fetch("/api/bold/verify-payment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -39,7 +56,15 @@ function PaymentResultContent() {
           }),
         })
 
+        const data = await response.json()
+        console.log("[PaymentResult] verify-payment response:", { status: response.status, data })
+
         if (response.ok) {
+          // Use the payment_type returned by API if available
+          if (data.payment_type) {
+            setPaymentType(data.payment_type)
+          }
+
           if (boldTxStatus === "approved") {
             setState("approved")
           } else if (boldTxStatus === "rejected") {
@@ -48,17 +73,26 @@ function PaymentResultContent() {
             setState("pending")
           }
         } else {
+          console.error("[PaymentResult] API error:", data)
           // Even if API fails, show the correct status to the user
           setState(boldTxStatus === "approved" ? "approved" : boldTxStatus === "rejected" ? "rejected" : "pending")
         }
       } catch (err) {
-        console.error("[v0] Error processing payment result:", err)
+        console.error("[PaymentResult] Error processing payment result:", err)
         setState(boldTxStatus === "approved" ? "approved" : "error")
       }
     }
 
     processResult()
   }, [searchParams])
+
+  const approvedDescription = paymentType === "featured"
+    ? "Tu pago ha sido procesado correctamente. Tu propiedad ahora esta destacada y aparecera en las primeras posiciones durante 30 dias."
+    : "Tu pago ha sido procesado correctamente. Tu propiedad ya esta publicada y visible para todos."
+
+  const pendingDescription = paymentType === "featured"
+    ? "Tu pago esta siendo procesado. Te notificaremos cuando se confirme y tu propiedad sera destacada automaticamente."
+    : "Tu pago esta siendo procesado. Te notificaremos cuando se confirme y tu propiedad sera publicada automaticamente."
 
   const configs = {
     loading: {
@@ -69,8 +103,8 @@ function PaymentResultContent() {
     },
     approved: {
       icon: <CheckCircle className="h-16 w-16 text-green-600" />,
-      title: "Pago Exitoso",
-      description: "Tu pago ha sido procesado correctamente. Tu propiedad ya esta publicada y visible para todos.",
+      title: paymentType === "featured" ? "Propiedad Destacada" : "Pago Exitoso",
+      description: approvedDescription,
       color: "text-green-600",
     },
     rejected: {
@@ -82,7 +116,7 @@ function PaymentResultContent() {
     pending: {
       icon: <Clock className="h-16 w-16 text-amber-500" />,
       title: "Pago Pendiente",
-      description: "Tu pago esta siendo procesado. Te notificaremos cuando se confirme y tu propiedad sera publicada automaticamente.",
+      description: pendingDescription,
       color: "text-amber-500",
     },
     error: {
