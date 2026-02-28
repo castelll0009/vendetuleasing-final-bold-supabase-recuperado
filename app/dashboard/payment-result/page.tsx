@@ -88,6 +88,10 @@ function PaymentResultContent() {
             setState("pending");
           }
         } else {
+          console.error("[PaymentResult] ❌ API respondió con error:", {
+            statusCode: response.status,
+            responseBody: data,
+          });
           console.error("[PaymentResult] ❌ API respondió con error:", data);
           setState(
             boldTxStatus === "approved"

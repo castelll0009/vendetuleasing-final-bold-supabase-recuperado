@@ -34,8 +34,13 @@ export async function POST(request: NextRequest) {
 
     // If payment approved, update the property
     if (status === "approved" && payment.property_id) {
+      console.log("[BoldWebhook] updating property", {
+        propertyId: payment.property_id,
+        paymentType: payment.payment_type,
+      });
+
       if (payment.payment_type === "publication") {
-        await supabase
+        const { data: propData, error: propError } = await supabase
           .from("properties")
           .update({
             publication_status: "published",
@@ -45,11 +50,18 @@ export async function POST(request: NextRequest) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", payment.property_id)
+          .select("*")
+
+        if (propError) {
+          console.error("[BoldWebhook] error publishing property", propError)
+        } else {
+          console.log("[BoldWebhook] property published result", propData)
+        }
       } else if (payment.payment_type === "featured") {
         const featuredUntil = new Date()
         featuredUntil.setDate(featuredUntil.getDate() + 30) // 30 days featured
 
-        await supabase
+        const { data: propData, error: propError } = await supabase
           .from("properties")
           .update({
             is_featured_paid: true,
@@ -59,6 +71,13 @@ export async function POST(request: NextRequest) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", payment.property_id)
+          .select("*")
+
+        if (propError) {
+          console.error("[BoldWebhook] error featuring property", propError)
+        } else {
+          console.log("[BoldWebhook] property featured result", propData)
+        }
       }
     }
 
