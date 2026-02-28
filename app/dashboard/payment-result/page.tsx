@@ -44,46 +44,66 @@ function PaymentResultContent() {
 
     const processResult = async () => {
       try {
-        console.log("[PaymentResult] Calling verify-payment API...")
+        console.log("[PaymentResult] ========== PROCESANDO RESULTADO ==========");
+        console.log("[PaymentResult] boldOrderId:", boldOrderId);
+        console.log("[PaymentResult] boldTxStatus:", boldTxStatus);
+        const mappedStatus = boldTxStatus === "approved" ? "approved" : boldTxStatus === "rejected" ? "rejected" : "pending";
+        console.log("[PaymentResult] mappedStatus:", mappedStatus);
+
+        const payload = {
+          order_id: boldOrderId,
+          status: mappedStatus,
+          transaction_id: searchParams.get("bold-tx-id") || null,
+          payment_method: searchParams.get("bold-payment-method") || null,
+        };
+        console.log("[PaymentResult] Payload a enviar a verify-payment:", payload);
+
         const response = await fetch("/api/bold/verify-payment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            order_id: boldOrderId,
-            status: boldTxStatus === "approved" ? "approved" : boldTxStatus === "rejected" ? "rejected" : "pending",
-            transaction_id: searchParams.get("bold-tx-id") || null,
-            payment_method: searchParams.get("bold-payment-method") || null,
-          }),
-        })
+          body: JSON.stringify(payload),
+        });
 
-        const data = await response.json()
-        console.log("[PaymentResult] verify-payment response:", { status: response.status, data })
+        const data = await response.json();
+        console.log("[PaymentResult] ✅ Respuesta recibida:", {
+          status: response.status,
+          data,
+        });
 
         if (response.ok) {
-          // Use the payment_type returned by API if available
+          console.log("[PaymentResult] Respuesta OK, seteando UI...");
           if (data.payment_type) {
-            setPaymentType(data.payment_type)
+            console.log("[PaymentResult] Detectado payment_type:", data.payment_type);
+            setPaymentType(data.payment_type);
           }
 
           if (boldTxStatus === "approved") {
-            setState("approved")
+            console.log("[PaymentResult] Seteando estado: approved");
+            setState("approved");
           } else if (boldTxStatus === "rejected") {
-            setState("rejected")
+            console.log("[PaymentResult] Seteando estado: rejected");
+            setState("rejected");
           } else {
-            setState("pending")
+            console.log("[PaymentResult] Seteando estado: pending");
+            setState("pending");
           }
         } else {
-          console.error("[PaymentResult] API error:", data)
-          // Even if API fails, show the correct status to the user
-          setState(boldTxStatus === "approved" ? "approved" : boldTxStatus === "rejected" ? "rejected" : "pending")
+          console.error("[PaymentResult] ❌ API respondió con error:", data);
+          setState(
+            boldTxStatus === "approved"
+              ? "approved"
+              : boldTxStatus === "rejected"
+                ? "rejected"
+                : "pending"
+          );
         }
       } catch (err) {
-        console.error("[PaymentResult] Error processing payment result:", err)
-        setState(boldTxStatus === "approved" ? "approved" : "error")
+        console.error("[PaymentResult] ❌ EXCEPCIÓN:", err);
+        setState(boldTxStatus === "approved" ? "approved" : "error");
       }
-    }
+    };
 
-    processResult()
+    processResult();
   }, [searchParams])
 
   const approvedDescription = paymentType === "featured"

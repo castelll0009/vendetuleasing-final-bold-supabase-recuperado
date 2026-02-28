@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react"
 interface BoldPaymentButtonProps {
   propertyId: string
   propertyTitle: string
-  amount: number // COP enteros
+  amount: number
   paymentType: "publication" | "featured"
 }
 
@@ -17,32 +17,46 @@ export function BoldPaymentButton({
   paymentType,
 }: BoldPaymentButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  // keep orderId stable across renders so signature always matches
+  const [orderId] = useState(
+    () =>
+      `${paymentType.toUpperCase()}-${propertyId.replace(/-/g, "").slice(0, 8)}-${Date.now()}`
+  )
+
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [signature, setSignature] = useState<string>("")
-  const [orderId] = useState(
-    () => `${paymentType.toUpperCase()}-${propertyId.replace(/-/g, '').slice(0, 8)}-${Date.now()}`
-  )
 
-  const API_KEY = process.env.NEXT_PUBLIC_BOLD_API_KEY
   const currency = "COP"
   const description =
     paymentType === "publication"
       ? `Publicacion: ${propertyTitle.substring(0, 80)}`
       : `Destacar: ${propertyTitle.substring(0, 80)}`
-  const redirectUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/dashboard/payment-result`
-    : ""
+  const redirectUrl = `${window.location.origin}/dashboard/payment-result`
 
-  // Get signature from server API (also creates payment record in DB)
+  // Fetch signature once using stable orderId
   useEffect(() => {
     if (typeof window === "undefined") return
-    let cancelled = false
 
     const fetchSignature = async () => {
       try {
-        console.log("[v0] Fetching signature for:", { orderId, amount, currency, paymentType, propertyId })
-        const response = await fetch("/api/bold/generate-hash", {
+        console.log("[BoldButton] ========== INICIO ==========");
+        console.log("[BoldButton] Datos del botón:", {
+          propertyId,
+          amount,
+          paymentType,
+          orderId,
+          currency,
+        });
+        const payload = {
+          orderId,
+          amount: Number(amount),
+          currency,
+          paymentType,
+          propertyId,
+        };
+        console.log("[BoldButton] Payload a generate-hash:", payload);
+        const res = await fetch("/api/bold/generate-hash", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -54,48 +68,65 @@ export function BoldPaymentButton({
           }),
         })
 
-        const data = await response.json()
+        const data = await res.json()
 
-        if (!response.ok) {
-          console.error("[v0] generate-hash error response:", data)
-          throw new Error(data.error || "Error obteniendo firma")
+        console.log("[BoldButton] Status respuesta:", res.status);
+        console.log("[BoldButton] Respuesta JSON:", data);
+
+        if (!res.ok) {
+          console.error("[BoldButton] ❌ Error del servidor:", data);
+          throw new Error(data.error || "Error obteniendo firma");
         }
 
-        if (!cancelled) {
-          console.log("[v0] Signature received successfully")
-          setSignature(data.integritySignature)
-        }
-      } catch (err) {
-        console.error("[v0] Error fetching signature:", err)
-        if (!cancelled) {
-          setError("Error preparando pago. Intenta recargar la pagina.")
-          setIsLoading(false)
-        }
+        console.log("[BoldButton] ✅ Firma recibida:", data.integritySignature);
+        setSignature(data.integritySignature)
+      } catch (err: any) {
+        console.error("[BoldButton] ❌ EXCEPCIÓN:", err.message);
+        setError("Error preparando pago. Intenta recargar la página.");
+        setIsLoading(false);
       }
     }
-    fetchSignature()
 
-    return () => { cancelled = true }
+    fetchSignature()
   }, [orderId, amount, currency, paymentType, propertyId])
 
-  // Insert Bold button (after we have the server-generated signature)
+  // Render botón
   useEffect(() => {
-    if (!signature || !containerRef.current) return
-
-    containerRef.current.innerHTML = ""
-
-    // Load Bold library once
-    if (!document.querySelector('script[src="https://checkout.bold.co/library/boldPaymentButton.js"]')) {
-      const libScript = document.createElement('script')
-      libScript.src = 'https://checkout.bold.co/library/boldPaymentButton.js'
-      libScript.async = true
-      document.head.appendChild(libScript)
+    if (!signature || !containerRef.current) {
+      console.log("[BoldButton] No renderizando botón aún:", {
+        tieneSignature: !!signature,
+        tieneContainer: !!containerRef.current,
+      });
+      return;
     }
 
-    const btn = document.createElement('script')
+    console.log("[BoldButton] ========== INYECTANDO BOTÓN ==========");
+    containerRef.current.innerHTML = ""
 
-    btn.setAttribute('data-bold-button', 'dark-S')
-    btn.setAttribute('data-api-key', API_KEY || '')
+    if (!document.querySelector('script[src*="boldPaymentButton.js"]')) {
+      console.log("[BoldButton] Cargando librería de Bold...");
+      const script = document.createElement('script')
+      script.src = 'https://checkout.bold.co/library/boldPaymentButton.js'
+      script.async = true
+      document.head.appendChild(script)
+    }
+
+    console.log("[BoldButton] Creando script del botón con atributos:");
+    console.log({
+      "data-bold-button": "dark-L",
+      "data-api-key": process.env.NEXT_PUBLIC_BOLD_API_KEY,
+      "data-order-id": orderId,
+      "data-amount": amount.toString(),
+      "data-currency": currency,
+      "data-description": description,
+      "data-redirection-url": redirectUrl,
+      "data-render-mode": "embedded",
+      "data-integrity-signature": signature,
+    });
+
+    const btn = document.createElement('script')
+    btn.setAttribute('data-bold-button', 'dark-L')
+    btn.setAttribute('data-api-key', process.env.NEXT_PUBLIC_BOLD_API_KEY || '')
     btn.setAttribute('data-order-id', orderId)
     btn.setAttribute('data-amount', amount.toString())
     btn.setAttribute('data-currency', currency)
@@ -105,16 +136,15 @@ export function BoldPaymentButton({
     btn.setAttribute('data-integrity-signature', signature)
 
     containerRef.current.appendChild(btn)
+    console.log("[BoldButton] ✅ Botón inyectado exitosamente");
     setIsLoading(false)
 
     return () => {
       if (containerRef.current) containerRef.current.innerHTML = ""
     }
-  }, [signature, orderId, amount, currency, description, redirectUrl, API_KEY])
+  }, [signature, orderId, amount, currency, description, redirectUrl])
 
-  if (error) {
-    return <p className="text-xs text-destructive">{error}</p>
-  }
+  if (error) return <p className="text-xs text-destructive">{error}</p>
 
   return (
     <div className="flex flex-col items-start gap-1">
