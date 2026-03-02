@@ -43,17 +43,20 @@ export async function POST(request: NextRequest) {
 
       if (paymentType === "publication") {
         console.log("[verify-payment] Tipo: publication → Publicando...")
-        const { data: propData, error: propError } = await supabase
-          .from("properties")
-          .update({
-            publication_status: "published",
-            bold_payment_status: "approved",
-            paid_at: new Date().toISOString(),
-            payment_reference: order_id,
-            updated_at: new Date().toISOString(),
-          })
-          .ilike("id", `${propertyId}%`)
-          .select("*")
+        const updates = {
+          publication_status: "published",
+          bold_payment_status: "approved",
+          paid_at: new Date().toISOString(),
+          payment_reference: order_id,
+          updated_at: new Date().toISOString(),
+        }
+
+        // Use exact match when a full id is provided, otherwise allow prefix matching
+        const usePrefix = String(propertyId).length < 20
+        let query = supabase.from("properties").update(updates).select("*")
+        query = usePrefix ? query.ilike("id", `${propertyId}%`) : query.eq("id", propertyId)
+
+        const { data: propData, error: propError } = await query.limit(1)
 
         if (propError) {
           console.error("[verify-payment] ❌ ERROR al publicar:", propError)
@@ -65,17 +68,19 @@ export async function POST(request: NextRequest) {
         const thirtyDaysLater = new Date()
         thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30)
 
-        const { data: propData, error: propError } = await supabase
-          .from("properties")
-          .update({
-            is_featured_paid: true,
-            featured: true,
-            featured_until: thirtyDaysLater.toISOString(),
-            featured_payment_reference: order_id,
-            updated_at: new Date().toISOString(),
-          })
-          .ilike("id", `${propertyId}%`)
-          .select("*")
+        const updates = {
+          is_featured_paid: true,
+          featured: true,
+          featured_until: thirtyDaysLater.toISOString(),
+          featured_payment_reference: order_id,
+          updated_at: new Date().toISOString(),
+        }
+
+        const usePrefix = String(propertyId).length < 20
+        let query = supabase.from("properties").update(updates).select("*")
+        query = usePrefix ? query.ilike("id", `${propertyId}%`) : query.eq("id", propertyId)
+
+        const { data: propData, error: propError } = await query.limit(1)
 
         if (propError) {
           console.error("[verify-payment] ❌ ERROR al destacar:", propError)
