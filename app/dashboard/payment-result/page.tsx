@@ -25,6 +25,15 @@ function PaymentResultContent() {
       allParams: Object.fromEntries(searchParams.entries()),
     })
 
+    // attempt to decompose boldOrderId for logs
+    if (boldOrderId) {
+      const parts = boldOrderId.split("-")
+      const pre = parts.shift()
+      const ts = parts.pop()
+      const prop = parts.join("-")
+      console.log("[PaymentResult] parsed orderId:", { prefix: pre, propertyId: prop, timestamp: ts })
+    }
+
     setOrderId(boldOrderId)
 
     // Detect payment type from orderId prefix
@@ -50,12 +59,24 @@ function PaymentResultContent() {
         const mappedStatus = boldTxStatus === "approved" ? "approved" : boldTxStatus === "rejected" ? "rejected" : "pending";
         console.log("[PaymentResult] mappedStatus:", mappedStatus);
 
-        const payload = {
+        // try to recover propertyId from localStorage; if not found we fall back to
+        // extraction from the orderId prefix (the old behavior)
+        let storedPropertyId: string | null = null
+        if (typeof window !== "undefined" && boldOrderId) {
+          try {
+            storedPropertyId = localStorage.getItem(`bold_order_prop_${boldOrderId}`)
+          } catch {}
+        }
+
+        const payload: any = {
           order_id: boldOrderId,
           status: mappedStatus,
           transaction_id: searchParams.get("bold-tx-id") || null,
           payment_method: searchParams.get("bold-payment-method") || null,
         };
+        if (storedPropertyId) {
+          payload.property_id = storedPropertyId
+        }
         console.log("[PaymentResult] Payload a enviar a verify-payment:", payload);
 
         const response = await fetch("/api/bold/verify-payment", {
@@ -69,6 +90,9 @@ function PaymentResultContent() {
           status: response.status,
           data,
         });
+        if (data.updateResult) {
+          console.log("[PaymentResult] updateResult:", data.updateResult);
+        }
 
         if (response.ok) {
           console.log("[PaymentResult] Respuesta OK, seteando UI...");

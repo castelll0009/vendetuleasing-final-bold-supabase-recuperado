@@ -10,6 +10,8 @@ import Image from "next/image"
 import { Eye, Edit, Trash2, Building2, Star, Clock, CheckCircle } from "lucide-react"
 import type { Property } from "@/lib/types/database"
 import { BoldPaymentButton } from "@/components/dashboard/bold-payment-button"
+// fake button only used during local testing, hide in production
+// import { FakeBoldPaymentButton } from "@/components/dashboard/fake-bold-button"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -37,6 +39,16 @@ export function PropertiesTable({ properties: initialProperties }: PropertiesTab
   const [properties, setProperties] = useState(initialProperties)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  // simulation helper previously here; removed/commented
+
+  /*
+  const [simulatingId, setSimulatingId] = useState<string | null>(null)
+
+  const simulatePublish = async (propertyId: string) => {
+    // ... simulation code removed per request
+  }
+  */
+
 
   const statusLabels = {
     for_sale: "En Venta",
@@ -66,13 +78,58 @@ export function PropertiesTable({ properties: initialProperties }: PropertiesTab
     setIsDeleting(true)
     const supabase = createClient()
 
-    const { error } = await supabase.from("properties").delete().eq("id", deleteId)
+    // make sure we have a valid logged in user so the RLS policy will allow deletion
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.warn("[v0] delete request without authenticated user", authError)
+      alert("Debes iniciar sesión para eliminar la propiedad")
+      setIsDeleting(false)
+      setDeleteId(null)
+      return
+    }
+
+    // cleanup dependent records that reference this property
+    // the schema currently has FKs on payments, property_images, property_amenities,
+    // and transactions, so we delete in that order to avoid constraint errors.
+    const cleanupTables = [
+      "payments",
+      "property_images",
+      "property_amenities",
+      "transactions",
+    ]
+
+    for (const tbl of cleanupTables) {
+      const { error: e } = await supabase
+        .from(tbl)
+        .delete()
+        .match({ property_id: deleteId })
+
+      if (e) {
+        console.warn(
+          `[v0] failed to clean up \`${tbl}\` before deleting property`,
+          e
+        )
+        // continue anyway – the subsequent delete of the property will
+        // either succeed (if FK has ON DELETE CASCADE) or return a
+        // descriptive error we can show to the user
+      }
+    }
+
+    // now delete the property itself (still guarded by RLS and matching user)
+    const { error } = await supabase
+      .from("properties")
+      .delete()
+      .match({ id: deleteId, user_id: user.id })
 
     if (error) {
       console.error("[v0] Error deleting property:", error)
-      alert("Error al eliminar la propiedad")
+      alert(error.message || "Error al eliminar la propiedad")
     } else {
-      setProperties(properties.filter((p) => p.id !== deleteId))
+      setProperties((prev) => prev.filter((p) => p.id !== deleteId))
       router.refresh()
     }
 
@@ -116,6 +173,17 @@ export function PropertiesTable({ properties: initialProperties }: PropertiesTab
               </thead>
               <tbody className="divide-y divide-border">
                 {properties.map((property) => {
+                  console.log("[PropertiesTable] property row:", {
+                    id: property.id,
+                    status: property.status,
+                    publication_status: (property as any).publication_status,
+                    is_featured_paid: (property as any).is_featured_paid,
+                    featured_until: (property as any).featured_until,
+                    price: property.price,
+                    title: property.title,
+                    city: property.city,
+                  })
+
                   const primaryImage = property.property_images?.find((img) => img.is_primary)
                   const imageUrl = primaryImage?.image_url || property.property_images?.[0]?.image_url
 
@@ -157,12 +225,22 @@ export function PropertiesTable({ properties: initialProperties }: PropertiesTab
                                 {config.label}
                               </Badge>
                               {pubStatus === "pending_payment" && (
-                                <BoldPaymentButton
-                                  propertyId={property.id}
-                                  propertyTitle={property.title}
-                                  amount={1000}
-                                  paymentType="publication"
-                                />
+                                <>
+                                  <BoldPaymentButton
+                                    propertyId={property.id}
+                                    propertyTitle={property.title}
+                                    amount={1000}
+                                    paymentType="publication"
+                                  />
+                                  {/* fake button for local testing
+                                  <FakeBoldPaymentButton
+                                    propertyId={property.id}
+                                    propertyTitle={property.title}
+                                    amount={1000}
+                                    paymentType="publication"
+                                  />
+                                  */}
+                                </>
                               )}
                             </div>
                           )
@@ -189,12 +267,22 @@ export function PropertiesTable({ properties: initialProperties }: PropertiesTab
 
                           if (pubStatus === "published") {
                             return (
-                              <BoldPaymentButton
-                                propertyId={property.id}
-                                propertyTitle={property.title}
-                                amount={100000}
-                                paymentType="featured"
-                              />
+                              <>
+                                <BoldPaymentButton
+                                  propertyId={property.id}
+                                  propertyTitle={property.title}
+                                  amount={100000}
+                                  paymentType="featured"
+                                />
+                                {/* fake button for local testing
+                                <FakeBoldPaymentButton
+                                  propertyId={property.id}
+                                  propertyTitle={property.title}
+                                  amount={100000}
+                                  paymentType="featured"
+                                />
+                                */}
+                              </>
                             )
                           }
 

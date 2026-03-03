@@ -62,9 +62,20 @@ export async function POST(request: NextRequest) {
       .join("");
     console.log("[generate-hash] integritySignature generada:", integritySignature);
 
+    console.log("[generate-hash] ========== INTENTANDO INSERTAR EN PAYMENTS ==========");
     // Create payment record in DB - COP uses whole pesos
     // always insert a new row for this orderId; we rely on bold_reference uniqueness
     console.log("[generate-hash] Intentando insertar registro de pago...");
+    console.log("[generate-hash] Datos a insertar:", {
+      user_id: user.id,
+      property_id: propertyId || null,
+      payment_type: paymentType || "publication",
+      amount,
+      currency,
+      status: "pending",
+      bold_reference: orderId,
+    });
+
     const { error: paymentError, data: paymentData } = await supabase
       .from("payments")
       .insert({
@@ -80,11 +91,18 @@ export async function POST(request: NextRequest) {
 
     if (paymentError) {
       console.error(
-        "[generate-hash] ERROR al crear registro de pago:",
-        paymentError
+        "[generate-hash] ❌ ERROR CRÍTICO al crear registro de pago:",
+        {
+          code: paymentError.code,
+          message: paymentError.message,
+          details: paymentError.details,
+          hint: paymentError.hint,
+          fullError: paymentError,
+        }
       );
-      console.error("[generate-hash] Código error:", paymentError.code);
-      console.error("[generate-hash] Mensaje:", paymentError.message);
+      console.error("[generate-hash] INVESTIGACIÓN: ¿Existe la tabla? ¿RLS? ¿Permisos?");
+      // DON'T throw; continue anyway so user can see the payment button
+      // but log it so we can debug
     } else {
       console.log(
         "[generate-hash] ✅ Payment row creado exitosamente:",

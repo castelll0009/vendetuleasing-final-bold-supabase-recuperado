@@ -18,10 +18,20 @@ export function BoldPaymentButton({
 }: BoldPaymentButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // keep orderId stable across renders so signature always matches
+  // keep orderId stable across renders so signature always matches
   const [orderId] = useState(
-    () =>
-      `${paymentType.toUpperCase()}-${propertyId.replace(/-/g, "").slice(0, 8)}-${Date.now()}`
+    () => `${paymentType.toUpperCase()}-${propertyId}-${Date.now()}`
   )
+  console.log( "orderId  y propertiId desde el bold-payment-button"+ orderId, propertyId)
+
+  // persist mapping so we can recover full propertyId after redirect
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(`bold_order_prop_${orderId}`, propertyId)
+      } catch {}
+    }
+  }, [orderId, propertyId])
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -45,7 +55,7 @@ export function BoldPaymentButton({
           propertyId,
           amount,
           paymentType,
-          orderId,
+          orderId, // now contains full UUID
           currency,
         });
         const payload = {
