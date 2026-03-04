@@ -17,20 +17,18 @@ export function BoldPaymentButton({
   paymentType,
 }: BoldPaymentButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const hasForcedReload = useRef(false) // evita múltiples recargas del script
 
   const [orderId] = useState(
-    () =>
-      `${paymentType.toUpperCase()}-${propertyId.replace(/-/g, "").slice(0, 8)}-${Date.now()}`
+    () => `${paymentType.toUpperCase()}-${propertyId.replace(/-/g, "").slice(0, 8)}-${Date.now()}`
   )
 
-  console.log("[BoldButton] Generado → orderId:", orderId, " | propertyId:", propertyId)
+  console.log("[BoldButton] Generado orderId:", orderId)
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem(`bold_order_prop_${orderId}`, propertyId)
-      } catch {}
-    }
+    try {
+      localStorage.setItem(`bold_order_prop_${orderId}`, propertyId)
+    } catch {}
   }, [orderId, propertyId])
 
   const [isLoading, setIsLoading] = useState(true)
@@ -44,13 +42,10 @@ export function BoldPaymentButton({
       : `Destacar: ${propertyTitle.substring(0, 80)}`
   const redirectUrl = `${window.location.origin}/dashboard/payment-result`
 
+  // Fetch de firma (sin cambios)
   useEffect(() => {
-    if (typeof window === "undefined") return
-
     const fetchSignature = async () => {
       try {
-        console.log("[BoldButton] Solicitando firma para orderId:", orderId)
-
         const res = await fetch("/api/bold/generate-hash", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -64,17 +59,14 @@ export function BoldPaymentButton({
         })
 
         const data = await res.json()
-
         if (!res.ok) {
-          console.error("[BoldButton] Error en generate-hash:", data)
           throw new Error(data.error || "Error obteniendo firma")
         }
 
-        console.log("[BoldButton] Firma obtenida OK")
         setSignature(data.integritySignature)
       } catch (err: any) {
-        console.error("[BoldButton] Error al preparar pago:", err.message)
-        setError("Error preparando pago. Intenta recargar la página.")
+        console.error("[BoldButton] Error firma:", err)
+        setError("Error preparando pago. Intenta recargar.")
         setIsLoading(false)
       }
     }
@@ -82,17 +74,11 @@ export function BoldPaymentButton({
     fetchSignature()
   }, [orderId, amount, currency, paymentType, propertyId])
 
+  // Insertar botón + forzar re-carga del script Bold (una sola vez)
   useEffect(() => {
     if (!signature || !containerRef.current) return
 
     containerRef.current.innerHTML = ""
-
-    if (!document.querySelector('script[src*="boldPaymentButton.js"]')) {
-      const script = document.createElement("script")
-      script.src = "https://checkout.bold.co/library/boldPaymentButton.js"
-      script.async = true
-      document.head.appendChild(script)
-    }
 
     const btn = document.createElement("script")
     btn.setAttribute("data-bold-button", "dark-L")
@@ -106,6 +92,24 @@ export function BoldPaymentButton({
     btn.setAttribute("data-integrity-signature", signature)
 
     containerRef.current.appendChild(btn)
+
+    // Forzar re-escaneo de Bold (solo una vez por página)
+    setTimeout(() => {
+      if (hasForcedReload.current) return
+      hasForcedReload.current = true
+
+      // Remover y re-agregar el script global de Bold
+      const existing = document.querySelectorAll('script[src*="boldPaymentButton.js"]')
+      existing.forEach((s) => s.remove())
+
+      const newScript = document.createElement("script")
+      newScript.src = "https://checkout.bold.co/library/boldPaymentButton.js"
+      newScript.async = true
+      document.head.appendChild(newScript)
+
+      console.log("[BoldButton] Script de Bold recargado para detectar botones dinámicos")
+    }, 400) // delay para asegurar que el <script> del botón ya esté en DOM
+
     setIsLoading(false)
 
     return () => {

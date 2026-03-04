@@ -48,11 +48,9 @@ interface PropertyFormProps {
   propertyId?: string;
 }
 
-const amenitiesList = [
-  "Ático",
+const amenitiesList = [  
   "Cancha de baloncesto",
-  "Aire acondicionado",
-  "Césped",
+  "Aire acondicionado",  
   "Televisión por cable",
   "Secadora",
   "Ducha a aire libre",
@@ -122,7 +120,7 @@ export function PropertyForm({
         !formData.bank_id
       ) {
         throw new Error(
-          "Por favor completa todos los campos requeridos (incluye el banco del leasing)"
+          "Por favor completa todos los campos requeridos (incluye el banco del leasing)",
         );
       }
 
@@ -182,7 +180,7 @@ export function PropertyForm({
             (img): img is { url: string; isPrimary: boolean } =>
               typeof img.url === "string" &&
               img.url.trim() !== "" &&
-              img.url.startsWith("http")
+              img.url.startsWith("http"),
           )
           .map((img) => ({
             property_id: propertyId_local!,
@@ -192,7 +190,7 @@ export function PropertyForm({
 
         if (validImageUrls.length === 0) {
           throw new Error(
-            "No se pudo obtener ninguna URL válida de las imágenes subidas. Intenta subirlas de nuevo."
+            "No se pudo obtener ninguna URL válida de las imágenes subidas. Intenta subirlas de nuevo.",
           );
         }
 
@@ -238,7 +236,7 @@ export function PropertyForm({
     setSelectedAmenities((prev) =>
       prev.includes(amenity)
         ? prev.filter((a) => a !== amenity)
-        : [...prev, amenity]
+        : [...prev, amenity],
     );
   };
 
@@ -336,17 +334,36 @@ export function PropertyForm({
                 <Label htmlFor="price">Precio (COP) *</Label>
                 <Input
                   id="price"
-                  type="number"
+                  type="text" // ← Cambiamos a text para poder mostrar comas/puntos
                   required
-                  value={formData.price}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      price: Number.parseFloat(e.target.value),
-                    })
+                  value={
+                    formData.price === 0
+                      ? ""
+                      : new Intl.NumberFormat("es-CO", {
+                          style: "decimal",
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        }).format(formData.price)
                   }
-                  placeholder="0"
+                  onChange={(e) => {
+                    // Quitamos todo lo que no sea número
+                    const rawValue = e.target.value.replace(/\D/g, "");
+                    const numericValue = rawValue
+                      ? Number.parseInt(rawValue, 10)
+                      : 0;
+                    setFormData({ ...formData, price: numericValue });
+                  }}
+                  onBlur={(e) => {
+                    // Opcional: al salir del input, forzamos formato limpio
+                    if (e.target.value.trim() === "") {
+                      setFormData({ ...formData, price: 0 });
+                    }
+                  }}
+                  placeholder="Ej: 250.000.000"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Escribe solo números, se formateará automáticamente
+                </p>
               </div>
 
               <div>
@@ -522,8 +539,8 @@ export function PropertyForm({
               {isSubmitting
                 ? "Guardando..."
                 : propertyId
-                ? "Actualizar Propiedad"
-                : "Publicar Propiedad"}
+                  ? "Actualizar Propiedad"
+                  : "Publicar Propiedad"}
             </Button>
           </div>
           <div>
