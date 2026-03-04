@@ -17,14 +17,14 @@ export function BoldPaymentButton({
   paymentType,
 }: BoldPaymentButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  // keep orderId stable across renders so signature always matches
-  // keep orderId stable across renders so signature always matches
-  const [orderId] = useState(
-    () => `${paymentType.toUpperCase()}-${propertyId}-${Date.now()}`
-  )
-  console.log( "orderId  y propertiId desde el bold-payment-button"+ orderId, propertyId)
 
-  // persist mapping so we can recover full propertyId after redirect
+  const [orderId] = useState(
+    () =>
+      `${paymentType.toUpperCase()}-${propertyId.replace(/-/g, "").slice(0, 8)}-${Date.now()}`
+  )
+
+  console.log("[BoldButton] Generado → orderId:", orderId, " | propertyId:", propertyId)
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -44,28 +44,13 @@ export function BoldPaymentButton({
       : `Destacar: ${propertyTitle.substring(0, 80)}`
   const redirectUrl = `${window.location.origin}/dashboard/payment-result`
 
-  // Fetch signature once using stable orderId
   useEffect(() => {
     if (typeof window === "undefined") return
 
     const fetchSignature = async () => {
       try {
-        console.log("[BoldButton] ========== INICIO ==========");
-        console.log("[BoldButton] Datos del botón:", {
-          propertyId,
-          amount,
-          paymentType,
-          orderId, // now contains full UUID
-          currency,
-        });
-        const payload = {
-          orderId,
-          amount: Number(amount),
-          currency,
-          paymentType,
-          propertyId,
-        };
-        console.log("[BoldButton] Payload a generate-hash:", payload);
+        console.log("[BoldButton] Solicitando firma para orderId:", orderId)
+
         const res = await fetch("/api/bold/generate-hash", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -80,73 +65,47 @@ export function BoldPaymentButton({
 
         const data = await res.json()
 
-        console.log("[BoldButton] Status respuesta:", res.status);
-        console.log("[BoldButton] Respuesta JSON:", data);
-
         if (!res.ok) {
-          console.error("[BoldButton] ❌ Error del servidor:", data);
-          throw new Error(data.error || "Error obteniendo firma");
+          console.error("[BoldButton] Error en generate-hash:", data)
+          throw new Error(data.error || "Error obteniendo firma")
         }
 
-        console.log("[BoldButton] ✅ Firma recibida:", data.integritySignature);
+        console.log("[BoldButton] Firma obtenida OK")
         setSignature(data.integritySignature)
       } catch (err: any) {
-        console.error("[BoldButton] ❌ EXCEPCIÓN:", err.message);
-        setError("Error preparando pago. Intenta recargar la página.");
-        setIsLoading(false);
+        console.error("[BoldButton] Error al preparar pago:", err.message)
+        setError("Error preparando pago. Intenta recargar la página.")
+        setIsLoading(false)
       }
     }
 
     fetchSignature()
   }, [orderId, amount, currency, paymentType, propertyId])
 
-  // Render botón
   useEffect(() => {
-    if (!signature || !containerRef.current) {
-      console.log("[BoldButton] No renderizando botón aún:", {
-        tieneSignature: !!signature,
-        tieneContainer: !!containerRef.current,
-      });
-      return;
-    }
+    if (!signature || !containerRef.current) return
 
-    console.log("[BoldButton] ========== INYECTANDO BOTÓN ==========");
     containerRef.current.innerHTML = ""
 
     if (!document.querySelector('script[src*="boldPaymentButton.js"]')) {
-      console.log("[BoldButton] Cargando librería de Bold...");
-      const script = document.createElement('script')
-      script.src = 'https://checkout.bold.co/library/boldPaymentButton.js'
+      const script = document.createElement("script")
+      script.src = "https://checkout.bold.co/library/boldPaymentButton.js"
       script.async = true
       document.head.appendChild(script)
     }
 
-    console.log("[BoldButton] Creando script del botón con atributos:");
-    console.log({
-      "data-bold-button": "dark-L",
-      "data-api-key": process.env.NEXT_PUBLIC_BOLD_API_KEY,
-      "data-order-id": orderId,
-      "data-amount": amount.toString(),
-      "data-currency": currency,
-      "data-description": description,
-      "data-redirection-url": redirectUrl,
-      "data-render-mode": "embedded",
-      "data-integrity-signature": signature,
-    });
-
-    const btn = document.createElement('script')
-    btn.setAttribute('data-bold-button', 'dark-L')
-    btn.setAttribute('data-api-key', process.env.NEXT_PUBLIC_BOLD_API_KEY || '')
-    btn.setAttribute('data-order-id', orderId)
-    btn.setAttribute('data-amount', amount.toString())
-    btn.setAttribute('data-currency', currency)
-    btn.setAttribute('data-description', description)
-    btn.setAttribute('data-redirection-url', redirectUrl)
-    btn.setAttribute('data-render-mode', 'embedded')
-    btn.setAttribute('data-integrity-signature', signature)
+    const btn = document.createElement("script")
+    btn.setAttribute("data-bold-button", "dark-L")
+    btn.setAttribute("data-api-key", process.env.NEXT_PUBLIC_BOLD_API_KEY || "")
+    btn.setAttribute("data-order-id", orderId)
+    btn.setAttribute("data-amount", amount.toString())
+    btn.setAttribute("data-currency", currency)
+    btn.setAttribute("data-description", description)
+    btn.setAttribute("data-redirection-url", redirectUrl)
+    btn.setAttribute("data-render-mode", "embedded")
+    btn.setAttribute("data-integrity-signature", signature)
 
     containerRef.current.appendChild(btn)
-    console.log("[BoldButton] ✅ Botón inyectado exitosamente");
     setIsLoading(false)
 
     return () => {

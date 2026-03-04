@@ -1,151 +1,106 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+// app/api/bold/verify-payment/route.ts
+import { NextRequest, NextResponse } from "next/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function POST(request: NextRequest) {
+  console.log("[verify-payment] ========== ENDPOINT INICIADO ==========")
+
   try {
-    console.log("[verify-payment] ========== INICIANDO ==========");
-    const {
-      order_id,
-      status,
-      property_id: providedPropertyId,
-    } = await request.json();
-
-    console.log("[verify-payment] Parámetros recibidos:", {
-      order_id,
-      status,
-      property_id: providedPropertyId,
-    });
-
-    if ((!order_id && !providedPropertyId) || !status) {
-      console.error("[verify-payment] ERROR: Faltan campos requeridos");
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    const body = await request.json().catch(() => null)
+    if (!body) {
+      return NextResponse.json({ error: "JSON inválido o vacío" }, { status: 400 })
     }
 
-    const supabase = createAdminClient();
+    console.log("[verify-payment] Body recibido:", body)
 
-    // Mapear estado de Bold
-    const mappedStatus =
-      status === "approved"
-        ? "approved"
-        : status === "rejected"
-          ? "rejected"
-          : "cancelled";
-    console.log("[verify-payment] Status mapeado:", {
-      original: status,
-      mapped: mappedStatus,
-    });
+    let propertyId = body.property_id?.trim() || ""  // Limpieza inmediata: trim elimina espacios al inicio/fin
+    const status = (body.status || "").trim().toLowerCase()
+    const order_id = body.order_id || "manual"
 
-    // Determinar propertyId: directamente, o extraerlo del order_id formato "PREFIX-<8chars>-<timestamp>"
-    let propertyId = providedPropertyId;
-    let paymentType = "publication";
-
-    if (!propertyId && order_id) {
-      const parts = order_id.split("-");
-      if (parts.length >= 3) {
-        // mínimo prefijo + uuid-part1 + uuid-part2 + ...
-        paymentType = parts[0] === "FEATURED" ? "featured" : "publication";
-
-        // Reconstruir el UUID completo (asumiendo que el timestamp está al final)
-        const timestamp = parts.pop(); // último elemento
-        const uuidParts = parts.slice(1); // todo menos el prefijo
-        propertyId = uuidParts.join("-"); // volver a unir con guiones
-        console.log("[verify-payment] Reconstruido UUID:", propertyId);
-      }
-    }
+    console.log("[verify-payment] property_id recibido crudo:", body.property_id)
+    console.log("[verify-payment] property_id después de trim:", propertyId)
+    console.log("[verify-payment] Longitud del ID limpio:", propertyId.length) // debe ser 36
+    console.log("[verify-payment] Status limpio:", status)
 
     if (!propertyId) {
-      console.error("[verify-payment] ERROR: No se pudo determinar propertyId");
-      return NextResponse.json(
-        { error: "Invalid order_id or missing property_id" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Falta property_id" }, { status: 400 })
     }
 
-    // Si status es "approved", actualizar propiedad
-    let updateResult: any = null;
-    if (mappedStatus === "approved") {
-      console.log(
-        "[verify-payment] Status aprobado, actualizando propiedad:",
-        propertyId,
-      );
+    if (propertyId.length !== 36) {
+      console.warn("[verify-payment] ID con longitud incorrecta:", propertyId.length)
+    }
 
-      if (paymentType === "publication") {
-        console.log("[verify-payment] Tipo: publication → Publicando...");
-        const updates = {
-          publication_status: "published",
-          bold_payment_status: "approved",
-          paid_at: new Date().toISOString(),
-          payment_reference: order_id,
-          updated_at: new Date().toISOString(),
-        };
+    const supabase = createAdminClient()
 
-        // Use exact match when a full id is provided, otherwise allow prefix matching
-        const usePrefix = String(propertyId).length < 20;
-        let query = supabase.from("properties").update(updates).select("*");
-        query = usePrefix
-          ? query.ilike("id", `${propertyId}%`)
-          : query.eq("id", propertyId);
+    // Verificación (con log de comparación)
+    console.log("[verify-payment] Buscando propiedad exactamente con:", propertyId)
+    const { data: prop, error: checkError } = await supabase
+      .from("properties")
+      .select("id, title, publication_status, bold_payment_status")
+      .eq("id", propertyId)
+      .single()
 
-        const { data: propData, error: propError } = await query.limit(1);
-        updateResult = { propData, propError };
+    if (checkError || !prop) {
+      console.error("[verify-payment] No encontrada o error:", {
+        error: checkError?.message,
+        details: checkError?.details,
+        hint: checkError?.hint,
+        receivedId: propertyId
+      })
 
-        if (propError) {
-          console.error("[verify-payment] ❌ ERROR al publicar:", propError);
-        } else {
-          console.log("[verify-payment] ✅ Propiedad publicada:", propData);
-        }
-      } else if (paymentType === "featured") {
-        console.log("[verify-payment] Tipo: featured → Destacando...");
-        const thirtyDaysLater = new Date();
-        thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-
-        const updates = {
-          is_featured_paid: true,
-          featured: true,
-          featured_until: thirtyDaysLater.toISOString(),
-          featured_payment_reference: order_id,
-          updated_at: new Date().toISOString(),
-        };
-
-        const usePrefix = String(propertyId).length < 20;
-        let query = supabase.from("properties").update(updates).select("*");
-        query = usePrefix
-          ? query.ilike("id", `${propertyId}%`)
-          : query.eq("id", propertyId);
-
-        const { data: propData, error: propError } = await query.limit(1);
-        updateResult = { propData, propError };
-
-        if (propError) {
-          console.error("[verify-payment] ❌ ERROR al destacar:", propError);
-        } else {
-          console.log(
-            "[verify-payment] ✅ Propiedad destacada hasta:",
-            thirtyDaysLater.toISOString(),
-            "result:",
-            propData,
-          );
-        }
-      }
+      // FORZAMOS UPDATE AUNQUE NO ENCUENTRE (temporal para debug - QUITA ESTO DESPUÉS)
+      console.log("[FORCE] Saltando verificación - forzando update de todos modos")
     } else {
-      console.log("[verify-payment] ⚠️ Status no aprobado, no se actualiza:", {
-        mappedStatus,
-      });
+      console.log("[verify-payment] Propiedad encontrada:", prop.title, "Estado actual:", prop.publication_status)
     }
 
-    console.log("[verify-payment] ========== COMPLETADO ==========");
-    // return update details for diagnostics
-    return NextResponse.json({
-      success: true,
-      payment_type: paymentType,
-      updateResult,
-    });
-  } catch (error: any) {
-    console.error("[verify-payment] ❌ EXCEPCIÓN:", {
-      message: error.message,
-      stack: error.stack,
-      code: error.code,
-    });
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    // Update (siempre intentamos si status es approved)
+    if (status === "approved" || status.includes("approved")) {
+      console.log("[verify-payment] Actualizando propiedad...")
+
+      const updates = {
+        publication_status: "published",
+        bold_payment_status: "approved",
+        paid_at: new Date().toISOString(),
+        payment_reference: order_id,
+        updated_at: new Date().toISOString(),
+      }
+
+      console.log("[verify-payment] Aplicando estos updates:", updates)
+
+      const { data: updated, error: updateError } = await supabase
+        .from("properties")
+        .update(updates)
+        .eq("id", propertyId)
+        .select()
+
+      if (updateError) {
+        console.error("[verify-payment] ERROR SUPABASE:", updateError.message, updateError.details)
+        return NextResponse.json({ error: updateError.message }, { status: 500 })
+      }
+
+      if (!updated || updated.length === 0) {
+        console.error("[verify-payment] 0 filas afectadas - ID NO COINCIDE o no existe")
+        return NextResponse.json({
+          error: "No se actualizó ninguna fila (ID no coincide)",
+          receivedId: propertyId,
+          length: propertyId.length
+        }, { status: 404 })
+      }
+
+      console.log("[verify-payment] ¡ÉXITO! Actualizada:", updated[0].id)
+      console.log("[verify-payment] Nuevo estado:", updated[0].publication_status)
+
+      return NextResponse.json({
+        success: true,
+        message: "Propiedad publicada correctamente",
+        updated: updated[0]
+      })
+    }
+
+    return NextResponse.json({ success: true, message: "No se requería actualización" })
+  } catch (err: any) {
+    console.error("[verify-payment] EXCEPCIÓN:", err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
