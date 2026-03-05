@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
           <div className="flex flex-col gap-6">
             <div className="flex justify-center mb-4">
               <Image
-                src="/images/design-mode/2.logo.png"
+                src="/logo.png"
                 alt="Vende Tu Leasing"
                 width={200}
                 height={60}
@@ -88,7 +88,7 @@ export default function ForgotPasswordPage() {
         <div className="flex flex-col gap-6">
           <div className="flex justify-center mb-4">
             <Image
-              src="/images/design-mode/2.logo.png"
+              src="/logo.png"
               alt="Vende Tu Leasing"
               width={200}
               height={60}
