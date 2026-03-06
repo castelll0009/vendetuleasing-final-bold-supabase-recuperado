@@ -41,13 +41,13 @@ export function DashboardStats({ stats }: DashboardStatsProps) {
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
     },
-    {
-      title: "Saldo Billetera",
-      value: formatCurrency(stats.walletBalance),
-      icon: Wallet,
-      color: "text-accent",
-      bgColor: "bg-accent/10",
-    },
+    // {
+    //   title: "Saldo Billetera",
+    //   value: formatCurrency(stats.walletBalance),
+    //   icon: Wallet,
+    //   color: "text-accent",
+    //   bgColor: "bg-accent/10",
+    // },
   ]
 
   return (
