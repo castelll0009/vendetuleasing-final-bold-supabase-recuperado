@@ -8,6 +8,7 @@ import { ExplanatoryVideos } from "@/components/landing/explanatory-videos"
 import { Testimonials } from "@/components/landing/testimonials"
 import { AboutSection } from "@/components/landing/about-section"
 import { ContactSection } from "@/components/landing/contact-section"
+import { LatestPropertiesSection } from "@/components/landing/latest-properties-section"
 
 export default function HomePage() {
   return (
@@ -17,6 +18,7 @@ export default function HomePage() {
       <FeaturedProperties/>
       <UniqueValue />
       <ServicesSection />
+      <LatestPropertiesSection />
       <PropertyTypes />      
       <HowItWorks />
       <ExplanatoryVideos />

@@ -271,7 +271,7 @@ export function PropertiesTable({ properties: initialProperties }: PropertiesTab
                                 <BoldPaymentButton
                                   propertyId={property.id}
                                   propertyTitle={property.title}
-                                  amount={100000}
+                                  amount={1000}
                                   paymentType="featured"
                                 />
                                 {/* fake button for local testing
