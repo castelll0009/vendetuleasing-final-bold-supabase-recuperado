@@ -1,278 +1,211 @@
 "use client"
 
+import { useState, useEffect, useCallback } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useDebouncedCallback } from "use-debounce"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { SlidersHorizontal, X } from "lucide-react"
 
+// ─── Constantes ───────────────────────────────────────────────────────────────
+const PRICE_MIN = 5000000       // 5 millones
+const PRICE_MAX = 3000000000    // 3.000 millones
+const PRICE_STEP = 1000000      // pasos de 1 millón
+
+const ADMIN_MIN = 0
+const ADMIN_MAX = 5000000
+
+const amenitiesList = ["Piscina", "Aire acondicionado"]
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 interface PropertyFiltersProps {
-  initialParams: {
-    status?: string
-    type?: string
-    city?: string
-    min_price?: string
-    max_price?: string
-    bedrooms?: string
-    bathrooms?: string
-    parking?: string
-    stratum?: string
-    min_sqft?: string
-    max_sqft?: string
-    amenities?: string
-      min_admin?: string; // 👈 nuevo filtro
-  max_admin?: string; // 👈 nuevo filtro
+  initialParams: Record<string, string | undefined>
+}
+
+type Filters = ReturnType<typeof buildInitialFilters>
+
+interface FilterContentProps {
+  filters: Filters
+  priceRange: [number, number]
+  onPriceChange: (values: number[]) => void
+  onPriceCommit: (values: number[]) => void
+  onFilterChange: (key: string, value: string) => void
+  toggleAmenity: (amenity: string) => void
+  resetFilters: () => void
+  setIsOpen: (open: boolean) => void
+  formatPrice: (val: string | number) => string
+}
+
+// ─── Helper estado inicial ────────────────────────────────────────────────────
+function buildInitialFilters(params: Record<string, string | undefined>) {
+  return {
+    type:      params.type      || "all",
+    city:      params.city      || "all",
+    min_price: params.min_price || PRICE_MIN.toString(),
+    max_price: params.max_price || PRICE_MAX.toString(),
+    bedrooms:  params.bedrooms  || "",
+    bathrooms: params.bathrooms || "",
+    parking:   params.parking   || "",
+    stratum:   params.stratum   || "none",
+    min_sqft:  params.min_sqft  || "",
+    max_sqft:  params.max_sqft  || "",
+    min_admin: params.min_admin || ADMIN_MIN.toString(),
+    max_admin: params.max_admin || ADMIN_MAX.toString(),
+    amenities: params.amenities
+      ? params.amenities.split(",").filter(Boolean)
+      : [],
   }
 }
 
-const amenitiesList = [
-  "Piscina",
-  "Aire acondicionado",
-
-]
-
-export function PropertyFilters({ initialParams }: PropertyFiltersProps) {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const [isOpen, setIsOpen] = useState(false)
-
-  const [filters, setFilters] = useState({
-    status: initialParams.status || "",
-    type: initialParams.type || "all",
-    city: initialParams.city || "all",
-    min_price: initialParams.min_price || "20",
-    max_price: initialParams.max_price || "70987",
-    bedrooms: initialParams.bedrooms || "",
-    bathrooms: initialParams.bathrooms || "",
-    parking: initialParams.parking || "",
-    stratum: initialParams.stratum || "",
-    min_sqft: initialParams.min_sqft || "",
-    max_sqft: initialParams.max_sqft || "",
-    property_id: "",
-    amenities: initialParams.amenities ? initialParams.amenities.split(",") : [],
-  })
-
-  const handleApplyFilters = () => {
-    const params = new URLSearchParams()
-
-    if (filters.status) params.set("status", filters.status)
-    if (filters.type && filters.type !== "all") params.set("type", filters.type)
-    if (filters.city && filters.city !== "all") params.set("city", filters.city)
-    if (filters.min_price) params.set("min_price", filters.min_price)
-    if (filters.max_price) params.set("max_price", filters.max_price)
-    if (filters.bedrooms) params.set("bedrooms", filters.bedrooms)
-    if (filters.bathrooms) params.set("bathrooms", filters.bathrooms)
-    if (filters.parking) params.set("parking", filters.parking)
-    if (filters.stratum) params.set("stratum", filters.stratum)
-    if (filters.min_sqft) params.set("min_sqft", filters.min_sqft)
-    if (filters.max_sqft) params.set("max_sqft", filters.max_sqft)
-    if (filters.amenities.length > 0) params.set("amenities", filters.amenities.join(","))
-
-    router.push(`/properties?${params.toString()}`)
-    setIsOpen(false)
-  }
-
-  const handleResetFilters = () => {
-    setFilters({
-      status: "",
-      type: "all",
-      city: "all",
-      min_price: "20",
-      max_price: "70987",
-      bedrooms: "",
-      bathrooms: "",
-      parking: "",
-      stratum: "",
-      min_sqft: "",
-      max_sqft: "",
-      property_id: "",
-      amenities: [],
-    })
-    router.push("/properties")
-  }
-
-  const toggleAmenity = (amenity: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      amenities: prev.amenities.includes(amenity)
-        ? prev.amenities.filter((a) => a !== amenity)
-        : [...prev.amenities, amenity],
-    }))
-  }
-
-  const FilterContent = () => (
+// ─── FilterContent (fuera del padre para evitar remounts) ────────────────────
+function FilterContent({
+  filters,
+  priceRange,
+  onPriceChange,
+  onPriceCommit,
+  onFilterChange,
+  toggleAmenity,
+  resetFilters,
+  setIsOpen,
+  formatPrice,
+}: FilterContentProps) {
+  return (
     <div className="space-y-6">
-      {/* Price Range */}
+
+      {/* ── Precio ── */}
       <div>
-        <Label className="text-base font-semibold mb-3 block">Gama de precios</Label>
-        <div className="space-y-4">
-          <Slider
-            min={20}
-            max={100000}
-            step={100}
-            value={[Number.parseFloat(filters.min_price), Number.parseFloat(filters.max_price)]}
-            onValueChange={([min, max]) => {
-              setFilters((prev) => ({
-                ...prev,
-                min_price: min.toString(),
-                max_price: max.toString(),
-              }))
-            }}
-            className="mb-4"
-          />
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Label htmlFor="min_price" className="text-sm">
-                Mínimo
-              </Label>
-              <Input
-                id="min_price"
-                type="number"
-                value={filters.min_price}
-                onChange={(e) => setFilters((prev) => ({ ...prev, min_price: e.target.value }))}
-                placeholder="$ 20"
-              />
-            </div>
-            <div className="flex-1">
-              <Label htmlFor="max_price" className="text-sm">
-                Máximo
-              </Label>
-              <Input
-                id="max_price"
-                type="number"
-                value={filters.max_price}
-                onChange={(e) => setFilters((prev) => ({ ...prev, max_price: e.target.value }))}
-                placeholder="$ 70987"
-              />
-            </div>
+        <Label className="font-semibold">Precio (COP)</Label>
+
+        <Slider
+          min={PRICE_MIN}
+          max={PRICE_MAX}
+          step={PRICE_STEP}
+          value={priceRange}
+          onValueChange={onPriceChange}   // mueve el thumb visualmente
+          onValueCommit={onPriceCommit}   // persiste al soltar
+          className="mt-4"
+        />
+
+        {/* Inputs sincronizados bidireccionalmente con el slider */}
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">
+              Mínimo
+            </Label>
+            <Input
+              type="number"
+              min={PRICE_MIN}
+              max={priceRange[1] - PRICE_STEP}
+              step={PRICE_STEP}
+              value={priceRange[0]}
+              onChange={(e) => {
+                const raw = Number(e.target.value)
+                const clamped = Math.min(
+                  Math.max(raw, PRICE_MIN),
+                  priceRange[1] - PRICE_STEP
+                )
+                onPriceChange([clamped, priceRange[1]])
+                onPriceCommit([clamped, priceRange[1]])
+              }}
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">
+              Máximo
+            </Label>
+            <Input
+              type="number"
+              min={priceRange[0] + PRICE_STEP}
+              max={PRICE_MAX}
+              step={PRICE_STEP}
+              value={priceRange[1]}
+              onChange={(e) => {
+                const raw = Number(e.target.value)
+                const clamped = Math.max(
+                  Math.min(raw, PRICE_MAX),
+                  priceRange[0] + PRICE_STEP
+                )
+                onPriceChange([priceRange[0], clamped])
+                onPriceCommit([priceRange[0], clamped])
+              }}
+            />
           </div>
         </div>
-      </div>
 
-      {/* Property Type & ID */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="type" className="text-sm font-semibold mb-2 block">
-            Tipo
-          </Label>
-          <Select value={filters.type} onValueChange={(value) => setFilters((prev) => ({ ...prev, type: value }))}>
-            <SelectTrigger id="type">
-              <SelectValue placeholder="Cualquier tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Cualquier tipo</SelectItem>
-              <SelectItem value="house">Casa</SelectItem>
-              <SelectItem value="apartment">Apartamento</SelectItem>
-              <SelectItem value="studio">Apartaestudio</SelectItem>
-              <SelectItem value="local">Local</SelectItem>
-              <SelectItem value="warehouse">Bodega</SelectItem>
-              <SelectItem value="office">Oficina</SelectItem>
-              <SelectItem value="building">Edificio</SelectItem>
-              <SelectItem value="other">Otros</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="property_id" className="text-sm font-semibold mb-2 block">
-            ID de Propiedad
-          </Label>
-          <Input
-            id="property_id"
-            value={filters.property_id}
-            onChange={(e) => setFilters((prev) => ({ ...prev, property_id: e.target.value }))}
-            placeholder="RTD0494213"
-          />
+        {/* Etiquetas formateadas del rango actual */}
+        <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+          <span>{formatPrice(priceRange[0])}</span>
+          <span>{formatPrice(priceRange[1])}</span>
         </div>
       </div>
 
-      {/* Bedrooms, Bathrooms, Parking & Stratum */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-sm font-semibold mb-2 block">Habitaciones</Label>
-          <Input
-            type="number"
-            value={filters.bedrooms}
-            onChange={(e) => setFilters((prev) => ({ ...prev, bedrooms: e.target.value }))}
-            placeholder="Cualquier"
-            min="0"
-          />
-        </div>
-        <div>
-          <Label className="text-sm font-semibold mb-2 block">Baños</Label>
-          <Input
-            type="number"
-            value={filters.bathrooms}
-            onChange={(e) => setFilters((prev) => ({ ...prev, bathrooms: e.target.value }))}
-            placeholder="Cualquier"
-            min="0"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-sm font-semibold mb-2 block">Parqueaderos</Label>
-          <Input
-            type="number"
-            value={filters.parking}
-            onChange={(e) => setFilters((prev) => ({ ...prev, parking: e.target.value }))}
-            placeholder="Cualquier"
-            min="0"
-          />
-        </div>
-        <div>
-          <Label className="text-sm font-semibold mb-2 block">Estrato</Label>
-          <Select
-            value={filters.stratum}
-            onValueChange={(value) => setFilters((prev) => ({ ...prev, stratum: value }))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Cualquier" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Cualquier estrato</SelectItem>
-              <SelectItem value="1">Estrato 1</SelectItem>
-              <SelectItem value="2">Estrato 2</SelectItem>
-              <SelectItem value="3">Estrato 3</SelectItem>
-              <SelectItem value="4">Estrato 4</SelectItem>
-              <SelectItem value="5">Estrato 5</SelectItem>
-              <SelectItem value="6">Estrato 6</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-{/* Filtro: Valor de la administración */}
-<div className="space-y-2">
-  <label className="text-sm font-medium">Valor de la administración</label>
-  <div className="flex gap-2">
-    <Input
-      name="min_admin"
-      placeholder="Mínimo"
-      defaultValue={initialParams.min_admin}
-      type="number"
-    />
-    <Input
-      name="max_admin"
-      placeholder="Máximo"
-      defaultValue={initialParams.max_admin}
-      type="number"
-    />
-  </div>
-</div>
-
-      {/* Location */}
+      {/* ── Administración ── */}
       <div>
-        <Label htmlFor="city" className="text-sm font-semibold mb-2 block">
-          Ubicación
-        </Label>
-        <Select value={filters.city} onValueChange={(value) => setFilters((prev) => ({ ...prev, city: value }))}>
-          <SelectTrigger id="city">
+        <Label className="font-semibold">Administración (COP)</Label>
+        <div className="mt-2 grid grid-cols-2 gap-3">
+          <Input
+            type="number"
+            placeholder="Mínimo"
+            value={filters.min_admin}
+            onChange={(e) => onFilterChange("min_admin", e.target.value)}
+          />
+          <Input
+            type="number"
+            placeholder="Máximo"
+            value={filters.max_admin}
+            onChange={(e) => onFilterChange("max_admin", e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* ── Tipo de propiedad ── */}
+      <div>
+        <Label className="font-semibold">Tipo de propiedad</Label>
+        <Select
+          value={filters.type}
+          onValueChange={(v) => onFilterChange("type", v)}
+        >
+          <SelectTrigger className="mt-1.5">
+            <SelectValue placeholder="Cualquier tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Cualquier tipo</SelectItem>
+            <SelectItem value="house">Casa</SelectItem>
+            <SelectItem value="apartment">Apartamento</SelectItem>
+            <SelectItem value="studio">Apartaestudio</SelectItem>
+            <SelectItem value="local">Local</SelectItem>
+            <SelectItem value="office">Oficina</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* ── Ciudad ── */}
+      <div>
+        <Label className="font-semibold">Ciudad</Label>
+        <Select
+          value={filters.city}
+          onValueChange={(v) => onFilterChange("city", v)}
+        >
+          <SelectTrigger className="mt-1.5">
             <SelectValue placeholder="Todas las ciudades" />
           </SelectTrigger>
           <SelectContent>
@@ -286,33 +219,78 @@ export function PropertyFilters({ initialParams }: PropertyFiltersProps) {
         </Select>
       </div>
 
-      {/* Square Meters */}
+      {/* ── Habitaciones / Baños / Parqueaderos ── */}
+      <div className="grid grid-cols-3 gap-3">
+        {(
+          [
+            { key: "bedrooms",  label: "Habitaciones" },
+            { key: "bathrooms", label: "Baños" },
+            { key: "parking",   label: "Parqueaderos" },
+          ] as const
+        ).map(({ key, label }) => (
+          <div key={key}>
+            <Label className="text-sm">{label}</Label>
+            <Input
+              type="number"
+              min={0}
+              placeholder="Cualquier"
+              value={filters[key]}
+              onChange={(e) => onFilterChange(key, e.target.value)}
+              className="mt-1.5"
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* ── Estrato ── */}
       <div>
-        <Label className="text-sm font-semibold mb-2 block">Metros Cuadrados (m²)</Label>
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <Input
-              type="number"
-              value={filters.min_sqft}
-              onChange={(e) => setFilters((prev) => ({ ...prev, min_sqft: e.target.value }))}
-              placeholder="Mín."
-            />
-          </div>
-          <div className="flex-1">
-            <Input
-              type="number"
-              value={filters.max_sqft}
-              onChange={(e) => setFilters((prev) => ({ ...prev, max_sqft: e.target.value }))}
-              placeholder="Máximo"
-            />
-          </div>
+        <Label className="font-semibold">Estrato</Label>
+        <Select
+          value={filters.stratum}
+          onValueChange={(v) => onFilterChange("stratum", v)}
+        >
+          <SelectTrigger className="mt-1.5">
+            <SelectValue placeholder="Cualquier" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Cualquier estrato</SelectItem>
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                Estrato {n}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* ── Área (m²) ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-sm">Área mínima (m²)</Label>
+          <Input
+            type="number"
+            value={filters.min_sqft}
+            onChange={(e) => onFilterChange("min_sqft", e.target.value)}
+            placeholder="Mín."
+            className="mt-1.5"
+          />
+        </div>
+        <div>
+          <Label className="text-sm">Área máxima (m²)</Label>
+          <Input
+            type="number"
+            value={filters.max_sqft}
+            onChange={(e) => onFilterChange("max_sqft", e.target.value)}
+            placeholder="Máx."
+            className="mt-1.5"
+          />
         </div>
       </div>
 
-      {/* Caracteristicas del inmueble */}
+      {/* ── Amenidades ── */}
       <div>
-        <Label className="text-sm font-semibold mb-3 block">Caracteristicas del inmueble</Label>
-        <div className="grid grid-cols-2 gap-3">
+        <Label className="font-semibold">Características</Label>
+        <div className="mt-2 grid grid-cols-2 gap-2">
           {amenitiesList.map((amenity) => (
             <div key={amenity} className="flex items-center space-x-2">
               <Checkbox
@@ -328,56 +306,186 @@ export function PropertyFilters({ initialParams }: PropertyFiltersProps) {
         </div>
       </div>
 
-      {/* Action Buttons */}
+      {/* ── Botones ── */}
       <div className="flex gap-3 pt-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleResetFilters}
-          className="flex-1 hover:bg-accent/10 hover:text-accent bg-transparent"
-        >
+        <Button variant="outline" onClick={resetFilters} className="flex-1">
           <X className="mr-2 h-4 w-4" />
           Restablecer
         </Button>
-        <Button type="button" onClick={handleApplyFilters} className="flex-1 bg-accent hover:bg-accent/90 text-white">
-          Buscar
+        <Button onClick={() => setIsOpen(false)} className="flex-1">
+          Ver resultados
         </Button>
       </div>
     </div>
   )
+}
+
+// ─── Componente principal ─────────────────────────────────────────────────────
+export function PropertyFilters({ initialParams }: PropertyFiltersProps) {
+  const router      = useRouter()
+  const searchParams = useSearchParams()
+  const [isOpen, setIsOpen] = useState(false)
+
+  const [filters, setFilters] = useState<Filters>(() =>
+    buildInitialFilters(initialParams)
+  )
+
+  // Estado local del slider: se actualiza en cada px del drag sin disparar
+  // efectos secundarios. Solo se persiste en filters al soltar (onValueCommit).
+  const [priceRange, setPriceRange] = useState<[number, number]>([
+    Number(initialParams.min_price ?? PRICE_MIN),
+    Number(initialParams.max_price ?? PRICE_MAX),
+  ])
+
+  // ── URL update (debounced) ──────────────────────────────────────────────────
+  const debouncedUpdate = useDebouncedCallback((params: URLSearchParams) => {
+    router.replace(`/properties?${params.toString()}`, { scroll: false })
+  }, 450)
+
+  const updateUrl = useCallback(
+    (currentFilters: Filters) => {
+      const params = new URLSearchParams()
+
+      if (currentFilters.type    !== "all")  params.set("type",    currentFilters.type)
+      if (currentFilters.city    !== "all")  params.set("city",    currentFilters.city)
+      if (currentFilters.stratum !== "none") params.set("stratum", currentFilters.stratum)
+
+      const minP = Number(currentFilters.min_price)
+      const maxP = Number(currentFilters.max_price)
+      if (!Number.isNaN(minP) && minP > PRICE_MIN) params.set("min_price", minP.toString())
+      if (!Number.isNaN(maxP) && maxP < PRICE_MAX) params.set("max_price", maxP.toString())
+
+      const minA = Number(currentFilters.min_admin)
+      const maxA = Number(currentFilters.max_admin)
+      if (!Number.isNaN(minA) && minA > 0)        params.set("min_admin", minA.toString())
+      if (!Number.isNaN(maxA) && maxA < ADMIN_MAX) params.set("max_admin", maxA.toString())
+
+      ;(["bedrooms", "bathrooms", "parking", "min_sqft", "max_sqft"] as const).forEach(
+        (key) => {
+          const val = currentFilters[key]
+          if (val && val.trim() !== "") params.set(key, val)
+        }
+      )
+
+      if (currentFilters.amenities.length > 0) {
+        params.set("amenities", currentFilters.amenities.join(","))
+      }
+
+      debouncedUpdate(params)
+    },
+    [debouncedUpdate]
+  )
+
+  // Sincronizar al navegar atrás/adelante
+  useEffect(() => {
+    const minP = Number(searchParams.get("min_price") ?? PRICE_MIN)
+    const maxP = Number(searchParams.get("max_price") ?? PRICE_MAX)
+
+    setFilters((prev) => ({
+      ...prev,
+      min_price: searchParams.get("min_price") || PRICE_MIN.toString(),
+      max_price: searchParams.get("max_price") || PRICE_MAX.toString(),
+      min_admin: searchParams.get("min_admin") || ADMIN_MIN.toString(),
+      max_admin: searchParams.get("max_admin") || ADMIN_MAX.toString(),
+      type:      searchParams.get("type")      || "all",
+      city:      searchParams.get("city")      || "all",
+      stratum:   searchParams.get("stratum")   || "none",
+    }))
+
+    setPriceRange([minP, maxP])
+  }, [searchParams])
+
+  // Actualizar URL cuando filters cambia
+  useEffect(() => {
+    updateUrl(filters)
+  }, [filters]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  /** Mueve el thumb visualmente — NO toca filters ni la URL */
+  const handlePriceChange = useCallback((values: number[]) => {
+    setPriceRange([values[0], values[1]])
+  }, [])
+
+  /** Al soltar el thumb — persiste en filters → updateUrl (debounced) */
+  const handlePriceCommit = useCallback((values: number[]) => {
+    setFilters((prev) => ({
+      ...prev,
+      min_price: values[0].toString(),
+      max_price: values[1].toString(),
+    }))
+  }, [])
+
+  const handleFilterChange = useCallback((key: string, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  }, [])
+
+  const toggleAmenity = useCallback((amenity: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      amenities: prev.amenities.includes(amenity)
+        ? prev.amenities.filter((a) => a !== amenity)
+        : [...prev.amenities, amenity],
+    }))
+  }, [])
+
+  const resetFilters = useCallback(() => {
+    const reset = buildInitialFilters({})
+    setFilters(reset)
+    setPriceRange([PRICE_MIN, PRICE_MAX])
+    router.replace("/properties", { scroll: false })
+    setIsOpen(false)
+  }, [router])
+
+  const formatPrice = useCallback((val: string | number) => {
+    const num = Number(val)
+    return Number.isNaN(num) ? String(val) : num.toLocaleString("es-CO")
+  }, [])
+
+  const sharedProps: FilterContentProps = {
+    filters,
+    priceRange,
+    onPriceChange:  handlePriceChange,
+    onPriceCommit:  handlePriceCommit,
+    onFilterChange: handleFilterChange,
+    toggleAmenity,
+    resetFilters,
+    setIsOpen,
+    formatPrice,
+  }
 
   return (
     <>
-      {/* Mobile: Dialog */}
-      <div className="lg:hidden mb-4">
+      {/* ── Mobile: Dialog ── */}
+      <div className="lg:hidden mb-6">
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="w-full bg-transparent">
+            <Button variant="outline" className="w-full">
               <SlidersHorizontal className="mr-2 h-4 w-4" />
-              Más filtros
+              Filtros avanzados
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Más filtros</DialogTitle>
+              <DialogTitle>Filtros</DialogTitle>
             </DialogHeader>
-            <FilterContent />
+            <FilterContent {...sharedProps} />
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Desktop: Card */}
-      <Card className="hidden lg:block sticky top-20">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Filtros</span>
-            <Button variant="ghost" size="sm" onClick={handleResetFilters}>
+      {/* ── Desktop: Card sticky ── */}
+      <Card className="hidden lg:block sticky top-24">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center justify-between text-lg">
+            Filtros
+            <Button variant="ghost" size="sm" onClick={resetFilters}>
               Limpiar
             </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <FilterContent />
+          <FilterContent {...sharedProps} />
         </CardContent>
       </Card>
     </>

@@ -17,6 +17,7 @@ import {
   Heart,
   ExternalLink,
   Landmark,
+  MessageCircle,
 } from "lucide-react"
 import { BANK_MAP, type BankId } from "@/lib/banks"
 import type { Property } from "@/lib/types/database"
@@ -61,6 +62,40 @@ export function PropertyDetails({ property }: PropertyDetailsProps) {
       maximumFractionDigits: 0,
     }).format(price)
   }
+
+  // ── Preparación de enlaces de contacto ───────────────────────────────────────
+  const owner = property.profiles || {}
+
+  // Limpiar número de teléfono (quitar todo lo que no sea dígito o +)
+  const cleanPhone = owner.phone
+    ? owner.phone.replace(/[^\d+]/g, "")
+    : ""
+
+  // Formato legible para mostrar al usuario (con espacios cada 3 dígitos después del +57)
+  const displayPhone = cleanPhone
+    ? cleanPhone.replace(/(\+57)(\d{3})(\d{3})(\d{4})/, "$1 $2 $3 $4")
+    : null
+
+  // Mensaje prellenado para WhatsApp
+  const whatsappMessage = encodeURIComponent(
+    `Hola, estoy interesado en la propiedad "${property.title || "en venta"}". ` +
+    `¿Podrías darme más información? Gracias.`
+  )
+
+  // Asunto y cuerpo para email
+  const emailSubject = encodeURIComponent(`Consulta sobre ${property.title || "su propiedad"}`)
+  const emailBody = encodeURIComponent(
+    `Hola ${owner.full_name || "Propietario"},\n\n` +
+    `Estoy interesado en la propiedad "${property.title || "publicada en Vende Tu Leasing"}".\n` +
+    `Quisiera más detalles (precio, disponibilidad, visitas, condiciones, etc.).\n\n` +
+    `Gracias de antemano.\nSaludos cordiales.`
+  )
+
+  // Enlaces finales
+  const whatsappLink = cleanPhone ? `https://wa.me/${cleanPhone}?text=${whatsappMessage}` : null
+  const mailtoLink = owner.email
+    ? `mailto:${owner.email}?subject=${emailSubject}&body=${emailBody}`
+    : null
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-20">
@@ -302,55 +337,92 @@ export function PropertyDetails({ property }: PropertyDetailsProps) {
               <CardContent className="p-6 space-y-6">
                 <h3 className="text-xl font-semibold">Contactar al vendedor</h3>
 
-                {property.profiles ? (
+                {owner.full_name || owner.phone || owner.email ? (
                   <div className="flex items-center gap-4">
-                    {property.profiles.avatar_url ? (
+                    {owner.avatar_url ? (
                       <div className="relative h-16 w-16 flex-shrink-0">
                         <Image
-                          src={property.profiles.avatar_url}
-                          alt={property.profiles.full_name || "Vendedor"}
+                          src={owner.avatar_url}
+                          alt={owner.full_name || "Vendedor"}
                           fill
                           className="rounded-full object-cover border-2 border-background"
                         />
                       </div>
                     ) : (
                       <div className="h-16 w-16 rounded-full bg-accent/10 flex items-center justify-center text-2xl font-bold text-accent border-2 border-background">
-                        {property.profiles.full_name?.charAt(0) || "?"}
+                        {owner.full_name?.charAt(0) || "?"}
                       </div>
                     )}
 
                     <div>
                       <p className="font-semibold text-lg">
-                        {property.profiles.full_name || "Propietario"}
+                        {owner.full_name || "Propietario"}
                       </p>
                       <p className="text-sm text-muted-foreground">Propietario</p>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">Información del propietario no disponible</p>
+                  <p className="text-muted-foreground text-center py-4">
+                    Información del propietario no disponible
+                  </p>
                 )}
 
-                <div className="space-y-3 pt-4 border-t">
-                  {property.profiles?.phone && (
-                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white" size="lg">
-                      <Phone className="mr-2 h-5 w-5" />
-                      Llamar: {property.profiles.phone}
-                    </Button>
+                {/* Número de contacto visible + botones debajo */}
+                <div className="pt-4 border-t space-y-4">
+                  {displayPhone && (
+                    <div className="bg-muted/50 rounded-lg p-4 text-center">
+                      <p className="text-sm text-muted-foreground mb-1">Número de contacto</p>
+                      <p className="text-xl font-semibold flex items-center justify-center gap-2">
+                        <Phone className="h-5 w-5 text-accent" />
+                        {displayPhone}
+                      </p>
+                    </div>
                   )}
 
-                  {property.profiles?.email && (
-                    <Button variant="outline" className="w-full" size="lg">
-                      <Mail className="mr-2 h-5 w-5" />
-                      Enviar mensaje
-                    </Button>
-                  )}
+                  {/* Botones de WhatsApp y Email */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* WhatsApp */}
+                    {whatsappLink && (
+                      <Button 
+                        asChild 
+                        size="lg" 
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <a
+                          href={whatsappLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="Contactar por WhatsApp"
+                        >
+                          <MessageCircle className="mr-2 h-5 w-5" />
+                          WhatsApp
+                        </a>
+                      </Button>
+                    )}
+
+                    {/* Enviar correo */}
+                    {mailtoLink && (
+                      <Button 
+                        asChild 
+                        variant="outline" 
+                        size="lg"
+                      >
+                        <a href={mailtoLink} aria-label="Enviar correo al vendedor">
+                          <Mail className="mr-2 h-5 w-5" />
+                          Enviar email
+                        </a>
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
+                {/* Fecha de publicación */}
                 <div className="pt-4 text-center text-sm text-muted-foreground border-t">
-                  Publicado el {new Date(property.created_at).toLocaleDateString("es-CO", {
+                  Publicado el{" "}
+                  {new Date(property.created_at).toLocaleDateString("es-CO", {
                     year: "numeric",
                     month: "long",
-                    day: "numeric"
+                    day: "numeric",
                   })}
                 </div>
               </CardContent>
