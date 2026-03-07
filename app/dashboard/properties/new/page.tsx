@@ -1,3 +1,4 @@
+// app/dashboard/properties/new/page.tsx
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
@@ -24,7 +25,11 @@ export default async function NewPropertyPage() {
           <p className="text-muted-foreground mt-2">Completa la información para publicar tu propiedad</p>
         </div>
 
-        <PropertyForm userId={user.id} />
+        <PropertyForm 
+          userId={user.id} 
+          existingImages={[]}        // ✅ EXPLÍCITO: Array vacío
+          existingAmenities={[]}     // ✅ EXPLÍCITO: Array vacío
+        />
       </div>
     </DashboardLayout>
   )

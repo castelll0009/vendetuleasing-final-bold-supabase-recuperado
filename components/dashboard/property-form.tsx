@@ -1,13 +1,8 @@
 // components/dashboard/property-form.tsx
 "use client";
 
-import { BANK_MAP } from "@/lib/banks";
-import { ExternalLink, Landmark } from "lucide-react";
-
 import type React from "react";
 import { CloudinaryImageUploader } from "./image-uploader-cloudinary";
-import { put } from "@vercel/blob";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState, useEffect } from "react"; // ✅ Agregar useEffect
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { PropertyType, PropertyStatus } from "@/lib/types/database";
@@ -47,8 +42,8 @@ interface PropertyFormProps {
     bank_id?: string;
   };
   propertyId?: string;
-  existingImages?: Array<{ url: string; isPrimary: boolean }>; // ✅ Nuevo
-  existingAmenities?: string[]; // ✅ Nuevo
+  existingImages?: Array<{ url: string; isPrimary: boolean }>;
+  existingAmenities?: string[];
 }
 
 const amenitiesList = [  
@@ -68,13 +63,12 @@ export function PropertyForm({
   userId,
   initialData,
   propertyId,
-  existingImages = [], // ✅ Default empty array
-  existingAmenities = [], // ✅ Default empty array
+  existingImages = [],
+  existingAmenities = [],
 }: PropertyFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // ✅ Inicializar con datos existentes
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>(existingAmenities);
   const [selectedImages, setSelectedImages] = useState<Array<{ url: string; isPrimary: boolean }>>(existingImages);
 
@@ -96,7 +90,7 @@ export function PropertyForm({
     bank_id: initialData?.bank_id || "",
   });
 
-  // ✅ Sincronizar si los props cambian (por si acaso)
+  // Sincronizar datos existentes
   useEffect(() => {
     if (existingImages.length > 0) {
       setSelectedImages(existingImages);
@@ -134,8 +128,7 @@ export function PropertyForm({
         );
       }
 
-      // ✅ Validación diferente para crear vs editar
-      if (!propertyId && selectedImages.length === 0) {
+      if (selectedImages.length === 0) {
         throw new Error("Por favor agrega al menos una imagen a tu propiedad");
       }
 
@@ -143,8 +136,6 @@ export function PropertyForm({
 
       if (!propertyId_local) {
         // CREAR NUEVA PROPIEDAD
-        console.log("[v0] Creating new property");
-
         const propertyData = {
           ...formData,
           user_id: user.id,
@@ -164,8 +155,6 @@ export function PropertyForm({
         propertyId_local = property.id;
       } else {
         // ACTUALIZAR PROPIEDAD EXISTENTE
-        console.log("[v0] Updating property:", propertyId_local);
-        
         const { error } = await supabase
           .from("properties")
           .update({
@@ -179,43 +168,38 @@ export function PropertyForm({
           throw new Error(`Error al actualizar: ${error.message}`);
         }
 
-        // ✅ Solo eliminar imágenes si el usuario subió nuevas o modificó
-        // Si no hay imágenes seleccionadas, mantener las existentes
-        if (selectedImages.length > 0) {
-          await supabase
-            .from("property_images")
-            .delete()
-            .eq("property_id", propertyId_local);
+        // Eliminar imágenes antiguas solo si hay nuevas
+        await supabase
+          .from("property_images")
+          .delete()
+          .eq("property_id", propertyId_local);
+      }
+
+      // Insertar imágenes
+      const validImageUrls = selectedImages
+        .filter(
+          (img): img is { url: string; isPrimary: boolean } =>
+            typeof img.url === "string" &&
+            img.url.trim() !== "" &&
+            img.url.startsWith("http"),
+        )
+        .map((img) => ({
+          property_id: propertyId_local!,
+          image_url: img.url,
+          is_primary: img.isPrimary,
+        }));
+
+      if (validImageUrls.length > 0) {
+        const { error: imageError } = await supabase
+          .from("property_images")
+          .insert(validImageUrls);
+
+        if (imageError) {
+          throw new Error(`Error al guardar imágenes: ${imageError.message}`);
         }
       }
 
-      // ✅ Insertar imágenes (solo si hay seleccionadas)
-      if (selectedImages.length > 0) {
-        const validImageUrls = selectedImages
-          .filter(
-            (img): img is { url: string; isPrimary: boolean } =>
-              typeof img.url === "string" &&
-              img.url.trim() !== "" &&
-              img.url.startsWith("http"),
-          )
-          .map((img) => ({
-            property_id: propertyId_local!,
-            image_url: img.url,
-            is_primary: img.isPrimary,
-          }));
-
-        if (validImageUrls.length > 0) {
-          const { error: imageError } = await supabase
-            .from("property_images")
-            .insert(validImageUrls);
-
-          if (imageError) {
-            throw new Error(`Error al guardar imágenes: ${imageError.message}`);
-          }
-        }
-      }
-
-      // ✅ Actualizar amenities (eliminar todos e insertar los seleccionados)
+      // Actualizar amenities
       await supabase
         .from("property_amenities")
         .delete()
@@ -232,7 +216,7 @@ export function PropertyForm({
       router.push("/dashboard/properties");
       router.refresh();
     } catch (error) {
-      console.error("[v0] Error saving property:", error);
+      console.error("Error saving property:", error);
       const errorMessage =
         error instanceof Error
           ? error.message
@@ -330,7 +314,7 @@ export function PropertyForm({
             </div>
           </div>
 
-          {/* BANCO - MOVIDO ARRIBA PARA MEJOR UX */}
+          {/* Banco */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Información Financiera</h3>
             <div>
@@ -359,19 +343,24 @@ export function PropertyForm({
             </div>
           </div>
 
-          {/* Image Uploader */}
+          {/* Image Uploader - MÚLTIPLES IMÁGENES */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">
-              Imágenes {propertyId && <span className="text-sm font-normal text-muted-foreground">(Mantén las existentes o sube nuevas)</span>}
+              Imágenes 
+              {propertyId && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  (Mantén las existentes o sube nuevas)
+                </span>
+              )}
             </h3>
             <CloudinaryImageUploader 
               onImagesChange={setSelectedImages}
-              initialImages={selectedImages} // ✅ Pasar imágenes existentes al uploader
+              initialImages={selectedImages}
             />
-            {propertyId && selectedImages.length > 0 && (
+            {selectedImages.length > 0 && (
               <p className="text-sm text-muted-foreground">
-                {selectedImages.length} imagen(es) cargada(s). 
-                {selectedImages.some(img => img.isPrimary) && " (Una marcada como principal)"}
+                {selectedImages.length} imagen(es) cargada(s)
+                {selectedImages.some(img => img.isPrimary) && " • 1 principal seleccionada"}
               </p>
             )}
           </div>
