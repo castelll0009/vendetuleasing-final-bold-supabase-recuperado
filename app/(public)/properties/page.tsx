@@ -8,7 +8,7 @@ import type { PropertyStatus, PropertyType } from "@/lib/types/database";
 interface SearchParams {
   q?: string;
   status?: PropertyStatus;
-  type?: string;           // ahora string porque puede ser "all"
+  type?: string; // ahora string porque puede ser "all"
   city?: string;
   min_price?: string;
   max_price?: string;
@@ -43,7 +43,7 @@ export default async function PropertiesPage({
   // Búsqueda general (q)
   if (params.q) {
     query = query.or(
-      `title.ilike.%${params.q}%,address.ilike.%${params.q}%,city.ilike.%${params.q}%,property_id_code.ilike.%${params.q}%`
+      `title.ilike.%${params.q}%,address.ilike.%${params.q}%,city.ilike.%${params.q}%,property_id_code.ilike.%${params.q}%`,
     );
   }
 
@@ -145,13 +145,15 @@ export default async function PropertiesPage({
       .from("property_images")
       .select("property_id, image_url")
       .in("property_id", propertyIds)
-      .eq("is_primary", true)
-      .limit(1); // optimización: solo 1 por propiedad
+      .eq("is_primary", true);
 
     const imageMap = new Map<string, string>();
     images?.forEach((img) => {
       if (img.property_id && img.image_url) {
-        imageMap.set(img.property_id, img.image_url);
+        // Solo guarda la primera que encuentre por property_id
+        if (!imageMap.has(img.property_id)) {
+          imageMap.set(img.property_id, img.image_url);
+        }
       }
     });
 
@@ -192,7 +194,7 @@ export default async function PropertiesPage({
         });
 
         filteredProperties = filteredProperties.filter((p) =>
-          matchingProperties.has(p.id)
+          matchingProperties.has(p.id),
         );
       }
     }
@@ -211,7 +213,9 @@ export default async function PropertiesPage({
           </h1>
           <p className="mt-2 text-muted-foreground">
             {filteredProperties.length}{" "}
-            {filteredProperties.length === 1 ? "propiedad encontrada" : "propiedades encontradas"}
+            {filteredProperties.length === 1
+              ? "propiedad encontrada"
+              : "propiedades encontradas"}
             {params.q && ` para "${params.q}"`}
           </p>
         </div>
@@ -240,7 +244,12 @@ export default async function PropertiesPage({
                     property={{
                       ...property,
                       property_images: property.primary_image_url
-                        ? [{ image_url: property.primary_image_url, is_primary: true }]
+                        ? [
+                            {
+                              image_url: property.primary_image_url,
+                              is_primary: true,
+                            },
+                          ]
                         : [],
                     }}
                   />

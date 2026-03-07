@@ -1,3 +1,4 @@
+// components/dashboard/property-form.tsx
 "use client";
 
 import { BANK_MAP } from "@/lib/banks";
@@ -20,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useEffect } from "react"; // ✅ Agregar useEffect
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { PropertyType, PropertyStatus } from "@/lib/types/database";
@@ -46,6 +47,8 @@ interface PropertyFormProps {
     bank_id?: string;
   };
   propertyId?: string;
+  existingImages?: Array<{ url: string; isPrimary: boolean }>; // ✅ Nuevo
+  existingAmenities?: string[]; // ✅ Nuevo
 }
 
 const amenitiesList = [  
@@ -65,13 +68,15 @@ export function PropertyForm({
   userId,
   initialData,
   propertyId,
+  existingImages = [], // ✅ Default empty array
+  existingAmenities = [], // ✅ Default empty array
 }: PropertyFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
-  const [selectedImages, setSelectedImages] = useState<
-    Array<{ url: string; isPrimary: boolean }>
-  >([]);
+  
+  // ✅ Inicializar con datos existentes
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(existingAmenities);
+  const [selectedImages, setSelectedImages] = useState<Array<{ url: string; isPrimary: boolean }>>(existingImages);
 
   const [formData, setFormData] = useState({
     title: initialData?.title || "",
@@ -88,8 +93,18 @@ export function PropertyForm({
     country: initialData?.country || "Colombia",
     zip_code: initialData?.zip_code || "",
     featured: initialData?.featured || false,
-    bank_id: initialData?.bank_id || "", // ✅ nuevo
+    bank_id: initialData?.bank_id || "",
   });
+
+  // ✅ Sincronizar si los props cambian (por si acaso)
+  useEffect(() => {
+    if (existingImages.length > 0) {
+      setSelectedImages(existingImages);
+    }
+    if (existingAmenities.length > 0) {
+      setSelectedAmenities(existingAmenities);
+    }
+  }, [existingImages, existingAmenities]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,11 +122,6 @@ export function PropertyForm({
         throw new Error("Por favor inicia sesión para continuar");
       }
 
-      console.log("[v0] Authenticated user:", user.id);
-      console.log("[v0] Submitting property with data:", formData);
-      console.log("[v0] Selected amenities:", selectedAmenities);
-      console.log("[v0] Selected images:", selectedImages.length);
-
       if (
         !formData.title ||
         !formData.price ||
@@ -124,13 +134,15 @@ export function PropertyForm({
         );
       }
 
-      if (selectedImages.length === 0) {
+      // ✅ Validación diferente para crear vs editar
+      if (!propertyId && selectedImages.length === 0) {
         throw new Error("Por favor agrega al menos una imagen a tu propiedad");
       }
 
       let propertyId_local = propertyId;
 
       if (!propertyId_local) {
+        // CREAR NUEVA PROPIEDAD
         console.log("[v0] Creating new property");
 
         const propertyData = {
@@ -139,8 +151,6 @@ export function PropertyForm({
           publication_status: "pending_payment",
         };
 
-        console.log("[v0] Property data to insert:", propertyData);
-
         const { data: property, error } = await supabase
           .from("properties")
           .insert(propertyData)
@@ -148,33 +158,39 @@ export function PropertyForm({
           .single();
 
         if (error) {
-          console.error("[v0] Supabase error:", error);
           throw new Error(`Error al crear la propiedad: ${error.message}`);
         }
 
-        console.log("[v0] Property created successfully:", property);
         propertyId_local = property.id;
       } else {
+        // ACTUALIZAR PROPIEDAD EXISTENTE
         console.log("[v0] Updating property:", propertyId_local);
+        
         const { error } = await supabase
           .from("properties")
-          .update(formData)
+          .update({
+            ...formData,
+            updated_at: new Date().toISOString(),
+          })
           .eq("id", propertyId_local)
           .eq("user_id", user.id);
 
         if (error) {
-          console.error("[v0] Error updating property:", error);
           throw new Error(`Error al actualizar: ${error.message}`);
         }
 
-        await supabase
-          .from("property_images")
-          .delete()
-          .eq("property_id", propertyId_local);
+        // ✅ Solo eliminar imágenes si el usuario subió nuevas o modificó
+        // Si no hay imágenes seleccionadas, mantener las existentes
+        if (selectedImages.length > 0) {
+          await supabase
+            .from("property_images")
+            .delete()
+            .eq("property_id", propertyId_local);
+        }
       }
 
+      // ✅ Insertar imágenes (solo si hay seleccionadas)
       if (selectedImages.length > 0) {
-        // Filtrar solo las que realmente tienen una URL válida
         const validImageUrls = selectedImages
           .filter(
             (img): img is { url: string; isPrimary: boolean } =>
@@ -188,22 +204,18 @@ export function PropertyForm({
             is_primary: img.isPrimary,
           }));
 
-        if (validImageUrls.length === 0) {
-          throw new Error(
-            "No se pudo obtener ninguna URL válida de las imágenes subidas. Intenta subirlas de nuevo.",
-          );
-        }
+        if (validImageUrls.length > 0) {
+          const { error: imageError } = await supabase
+            .from("property_images")
+            .insert(validImageUrls);
 
-        const { error: imageError } = await supabase
-          .from("property_images")
-          .insert(validImageUrls);
-
-        if (imageError) {
-          console.error("Error detallado de Supabase:", imageError);
-          throw new Error(`Error al guardar imágenes: ${imageError.message}`);
+          if (imageError) {
+            throw new Error(`Error al guardar imágenes: ${imageError.message}`);
+          }
         }
       }
 
+      // ✅ Actualizar amenities (eliminar todos e insertar los seleccionados)
       await supabase
         .from("property_amenities")
         .delete()
@@ -217,7 +229,6 @@ export function PropertyForm({
         await supabase.from("property_amenities").insert(amenitiesData);
       }
 
-      console.log("[v0] Property saved successfully, redirecting...");
       router.push("/dashboard/properties");
       router.refresh();
     } catch (error) {
@@ -319,10 +330,50 @@ export function PropertyForm({
             </div>
           </div>
 
+          {/* BANCO - MOVIDO ARRIBA PARA MEJOR UX */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Información Financiera</h3>
+            <div>
+              <Label htmlFor="bank_id">Banco del leasing / crédito *</Label>
+              <Select
+                value={formData.bank_id}
+                onValueChange={(value: BankId) =>
+                  setFormData({ ...formData, bank_id: value })
+                }
+              >
+                <SelectTrigger id="bank_id">
+                  <SelectValue placeholder="Selecciona un banco" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BANKS.map((bank) => (
+                    <SelectItem key={bank.id} value={bank.id}>
+                      {bank.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-2">
+                Este dato es obligatorio para generar automáticamente los enlaces
+                oficiales en la ficha del inmueble.
+              </p>
+            </div>
+          </div>
+
           {/* Image Uploader */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Subir Imágenes</h3>
-            <CloudinaryImageUploader onImagesChange={setSelectedImages} />
+            <h3 className="text-lg font-semibold">
+              Imágenes {propertyId && <span className="text-sm font-normal text-muted-foreground">(Mantén las existentes o sube nuevas)</span>}
+            </h3>
+            <CloudinaryImageUploader 
+              onImagesChange={setSelectedImages}
+              initialImages={selectedImages} // ✅ Pasar imágenes existentes al uploader
+            />
+            {propertyId && selectedImages.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {selectedImages.length} imagen(es) cargada(s). 
+                {selectedImages.some(img => img.isPrimary) && " (Una marcada como principal)"}
+              </p>
+            )}
           </div>
 
           {/* Property Details */}
@@ -334,7 +385,7 @@ export function PropertyForm({
                 <Label htmlFor="price">Precio (COP) *</Label>
                 <Input
                   id="price"
-                  type="text" // ← Cambiamos a text para poder mostrar comas/puntos
+                  type="text"
                   required
                   value={
                     formData.price === 0
@@ -346,24 +397,14 @@ export function PropertyForm({
                         }).format(formData.price)
                   }
                   onChange={(e) => {
-                    // Quitamos todo lo que no sea número
                     const rawValue = e.target.value.replace(/\D/g, "");
                     const numericValue = rawValue
                       ? Number.parseInt(rawValue, 10)
                       : 0;
                     setFormData({ ...formData, price: numericValue });
                   }}
-                  onBlur={(e) => {
-                    // Opcional: al salir del input, forzamos formato limpio
-                    if (e.target.value.trim() === "") {
-                      setFormData({ ...formData, price: 0 });
-                    }
-                  }}
                   placeholder="Ej: 250.000.000"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Escribe solo números, se formateará automáticamente
-                </p>
               </div>
 
               <div>
@@ -371,11 +412,11 @@ export function PropertyForm({
                 <Input
                   id="square_feet"
                   type="number"
-                  value={formData.square_feet}
+                  value={formData.square_feet || ""}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      square_feet: Number.parseInt(e.target.value),
+                      square_feet: Number.parseInt(e.target.value) || 0,
                     })
                   }
                   placeholder="0"
@@ -387,11 +428,11 @@ export function PropertyForm({
                 <Input
                   id="bedrooms"
                   type="number"
-                  value={formData.bedrooms}
+                  value={formData.bedrooms || ""}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      bedrooms: Number.parseInt(e.target.value),
+                      bedrooms: Number.parseInt(e.target.value) || 0,
                     })
                   }
                   placeholder="0"
@@ -403,11 +444,11 @@ export function PropertyForm({
                 <Input
                   id="bathrooms"
                   type="number"
-                  value={formData.bathrooms}
+                  value={formData.bathrooms || ""}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      bathrooms: Number.parseInt(e.target.value),
+                      bathrooms: Number.parseInt(e.target.value) || 0,
                     })
                   }
                   placeholder="0"
@@ -505,6 +546,11 @@ export function PropertyForm({
                 </div>
               ))}
             </div>
+            {selectedAmenities.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {selectedAmenities.length} comodidad(es) seleccionada(s)
+              </p>
+            )}
           </div>
 
           {/* Featured */}
@@ -542,31 +588,6 @@ export function PropertyForm({
                   ? "Actualizar Propiedad"
                   : "Publicar Propiedad"}
             </Button>
-          </div>
-          <div>
-            <Label htmlFor="bank_id">Banco del leasing / crédito *</Label>
-            <Select
-              value={formData.bank_id}
-              onValueChange={(value: BankId) =>
-                setFormData({ ...formData, bank_id: value })
-              }
-            >
-              <SelectTrigger id="bank_id">
-                <SelectValue placeholder="Selecciona un banco" />
-              </SelectTrigger>
-              <SelectContent>
-                {BANKS.map((bank) => (
-                  <SelectItem key={bank.id} value={bank.id}>
-                    {bank.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <p className="text-xs text-muted-foreground mt-2">
-              Este dato es obligatorio para generar automáticamente los enlaces
-              oficiales en la ficha del inmueble.
-            </p>
           </div>
         </CardContent>
       </Card>

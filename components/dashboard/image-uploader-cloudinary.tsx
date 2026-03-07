@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"  // ← ¡Importantísimo!
+import { useState, useEffect } from "react"  // ← Agregado useEffect
 
 import { CldUploadWidget } from 'next-cloudinary'
 import Image from 'next/image'
@@ -17,6 +17,13 @@ export function CloudinaryImageUploader({
   initialImages = [] 
 }: ImageUploaderProps) {
   const [uploadedImages, setUploadedImages] = useState<Array<{ url: string; isPrimary: boolean }>>(initialImages)
+
+  // ✅ Sincronizar cuando cambian las initialImages (crucial para edición)
+  useEffect(() => {
+    if (initialImages.length > 0) {
+      setUploadedImages(initialImages)
+    }
+  }, [initialImages])
 
   const handleUpload = (result: any) => {
     const secureUrl = result?.info?.secure_url
@@ -63,7 +70,7 @@ export function CloudinaryImageUploader({
       >
         {({ open }) => (
           <Button type="button" onClick={() => open()} variant="outline" className="w-full">
-            Subir imágenes a Cloudinary
+            {uploadedImages.length > 0 ? 'Agregar más imágenes' : 'Subir imágenes a Cloudinary'}
           </Button>
         )}
       </CldUploadWidget>
@@ -71,12 +78,13 @@ export function CloudinaryImageUploader({
       {uploadedImages.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {uploadedImages.map((img, index) => (
-            <div key={index} className="relative group aspect-square">
+            <div key={`${img.url}-${index}`} className="relative group aspect-square">
               <Image
                 src={img.url}
                 alt={`Imagen ${index + 1}`}
                 fill
                 className="object-cover rounded-lg"
+                sizes="(max-width: 768px) 50vw, 25vw"
               />
               {img.isPrimary && (
                 <div className="absolute top-2 left-2 bg-accent text-white px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
@@ -102,7 +110,8 @@ export function CloudinaryImageUploader({
 
       {uploadedImages.length > 0 && (
         <p className="text-sm text-muted-foreground">
-          {uploadedImages.length} imagen{uploadedImages.length > 1 ? 'es' : ''} subida{uploadedImages.length > 1 ? 's' : ''}
+          {uploadedImages.length} imagen{uploadedImages.length > 1 ? 'es' : ''} 
+          {uploadedImages.some(img => img.isPrimary) && ' (1 principal)'}
         </p>
       )}
     </div>

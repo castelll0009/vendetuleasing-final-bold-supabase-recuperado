@@ -117,14 +117,14 @@ export function MobileNav({ user, profile, onClose }: MobileNavProps) {
               <LayoutDashboard className="h-4 w-4" />
               Dashboard
             </Link>
-            <Link
+            {/* <Link
               href="/dashboard/wallet"
               className="flex items-center gap-2 rounded-md px-3 py-2 text-base font-medium text-foreground hover:bg-accent/10 hover:text-accent"
               onClick={onClose}
             >
               <Wallet className="h-4 w-4" />
               Billetera
-            </Link>
+            </Link> */}
             <Link
               href="/dashboard/settings"
               className="flex items-center gap-2 rounded-md px-3 py-2 text-base font-medium text-foreground hover:bg-accent/10 hover:text-accent"

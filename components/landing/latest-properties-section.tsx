@@ -1,138 +1,150 @@
+// components/landing/latest-properties-section.tsx
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ArrowRight, Bed, Bath, Maximize, MapPin } from "lucide-react"
+import { ArrowRight, Search, Home, TrendingUp, Shield } from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"
+import { motion } from "framer-motion"
 
-// Este componente puede recibir propiedades reales o usar datos mock por ahora
-interface LatestPropertiesSectionProps {
-  properties?: Array<{
-    id: string
-    title: string
-    price: number
-    bedrooms?: number
-    bathrooms?: number
-    square_feet?: number
-    address?: string
-    city: string
-    primary_image_url?: string
-    status?: string
-  }>
-}
-
-export function LatestPropertiesSection({ properties = [] }: LatestPropertiesSectionProps) {
-  // Si no hay propiedades reales, usamos algunos ejemplos para el diseño
-  const displayProperties = properties.length > 0 
-    ? properties.slice(0, 6) // mostramos máximo 6 en landing
-    : [
-        {
-          id: "1",
-          title: "Apartamento moderno en el centro",
-          price: 320000000,
-          bedrooms: 3,
-          bathrooms: 2,
-          square_feet: 95,
-          address: "Calle 45 # 12-34",
-          city: "Pitalito",
-          primary_image_url: "/placeholder-property-1.jpg",
-          status: "for_sale",
-        },
-        // ... puedes agregar 2-5 más para mock si quieres
-      ]
-
-  const formatPrice = (price: number) =>
-    new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price)
+export function LatestPropertiesSection() {
+  const benefits = [
+    {
+      icon: Search,
+      title: "Búsqueda Inteligente",
+      description: "Filtra por precio, ubicación, habitaciones y más para encontrar exactamente lo que necesitas."
+    },
+    {
+      icon: Home,
+      title: "Propiedades Verificadas",
+      description: "Todas nuestras propiedades son revisadas y verificadas para tu tranquilidad."
+    },
+    {
+      icon: TrendingUp,
+      title: "Mejores Precios",
+      description: "Accede a oportunidades exclusivas de leasing con las mejores condiciones del mercado."
+    },
+    {
+      icon: Shield,
+      title: "Proceso Seguro",
+      description: "Acompañamiento legal y financiero durante todo el proceso de arrendamiento."
+    }
+  ]
 
   return (
-    <section className="py-16 md:py-24 bg-muted/30">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Título y descripción */}
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Propiedades Publicadas Recientemente
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Descubre las últimas propiedades disponibles en leasing. Encuentra tu próximo hogar o inversión.
-          </p>
+    <section className="py-20 md:py-32 bg-gradient-to-br from-background via-muted/20 to-background relative overflow-hidden">
+      {/* Elementos decorativos de fondo */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-1/2 -right-1/4 w-[600px] h-[600px] bg-accent/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-1/2 -left-1/4 w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl" />
+      </div>
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="max-w-4xl mx-auto text-center mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <span className="inline-block px-4 py-1.5 rounded-full bg-accent/10 text-accent text-sm font-semibold mb-6">
+              Catálogo Completo
+            </span>
+            
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 tracking-tight">
+              Encuentra tu{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-orange-500">
+                propiedad ideal
+              </span>
+            </h2>
+            
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              Explora nuestra amplia selección de propiedades en leasing. 
+              Desde apartamentos modernos hasta casas familiares, 
+              tenemos la opción perfecta para ti.
+            </p>
+          </motion.div>
         </div>
 
-        {/* Grid de propiedades */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {displayProperties.map((prop) => (
-            <Card 
-              key={prop.id} 
-              className="overflow-hidden hover:shadow-xl transition-all duration-300 border-none"
+        {/* Grid de beneficios */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          {benefits.map((benefit, index) => (
+            <motion.div
+              key={benefit.title}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              className="group p-6 rounded-2xl bg-card border border-border/50 hover:border-accent/50 hover:shadow-lg transition-all duration-300"
             >
-              <div className="relative aspect-[4/3] overflow-hidden">
-                <Image
-                  src={prop.primary_image_url || "/placeholder-property.jpg"}
-                  alt={prop.title}
-                  fill
-                  className="object-cover transition-transform duration-500 hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <div className="absolute bottom-4 left-4 right-4">
-                  <Badge className="bg-accent text-white mb-2">
-                    {formatPrice(prop.price)}
-                  </Badge>
-                  <h3 className="text-white font-semibold text-lg line-clamp-2">
-                    {prop.title}
-                  </h3>
-                </div>
+              <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4 group-hover:bg-accent group-hover:scale-110 transition-all duration-300">
+                <benefit.icon className="h-6 w-6 text-accent group-hover:text-white transition-colors" />
               </div>
-
-              <CardContent className="p-5">
-                <div className="flex items-center text-sm text-muted-foreground mb-3">
-                  <MapPin className="h-4 w-4 mr-1" />
-                  {prop.address ? `${prop.address}, ` : ""}
-                  {prop.city}
-                </div>
-
-                <div className="flex flex-wrap gap-6 text-sm">
-                  {prop.bedrooms !== undefined && (
-                    <div className="flex items-center gap-1.5">
-                      <Bed className="h-4 w-4 text-accent" />
-                      <span>{prop.bedrooms} hab</span>
-                    </div>
-                  )}
-                  {prop.bathrooms !== undefined && (
-                    <div className="flex items-center gap-1.5">
-                      <Bath className="h-4 w-4 text-accent" />
-                      <span>{prop.bathrooms} baños</span>
-                    </div>
-                  )}
-                  {prop.square_feet !== undefined && (
-                    <div className="flex items-center gap-1.5">
-                      <Maximize className="h-4 w-4 text-accent" />
-                      <span>{prop.square_feet} m²</span>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+              <h3 className="font-semibold text-lg mb-2">{benefit.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {benefit.description}
+              </p>
+            </motion.div>
           ))}
         </div>
 
-        {/* Botón principal - Ver todas las propiedades */}
-        <div className="mt-12 text-center">
-          <Button asChild size="lg" className="gap-2 text-lg px-10 py-6">
-            <Link href="/properties">
-              Ver todas las propiedades
-              <ArrowRight className="h-5 w-5" />
-            </Link>
-          </Button>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Encuentra más de {displayProperties.length}+ opciones actualizadas diariamente
+        {/* CTA Principal */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="text-center"
+        >
+          <div className="inline-flex flex-col sm:flex-row items-center gap-4 p-2 rounded-full bg-muted/50 border border-border">
+            <Button 
+              asChild 
+              size="lg" 
+              className="h-14 px-10 text-lg font-semibold bg-accent hover:bg-accent/90 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 group"
+            >
+              <Link href="/properties" className="flex items-center gap-3">
+                <Search className="h-5 w-5" />
+                Explorar Propiedades
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </Button>
+            
+            <span className="text-sm text-muted-foreground px-4 hidden sm:inline">
+             propiedades en leasing, actualizadas diariamente
+            </span>
+          </div>
+
+          <p className="mt-6 text-sm text-muted-foreground">
+            Actualizado diariamente • Propiedades destacadas • Sin comisiones ocultas
           </p>
-        </div>
+        </motion.div>
+
+        {/* Estadísticas de confianza */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.6 }}
+          className="mt-20 pt-12 border-t border-border/50"
+        >
+          <div className="flex flex-wrap justify-center gap-8 md:gap-16 text-center">
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-accent">150+</div>
+              <div className="text-sm text-muted-foreground mt-1">Propiedades Activas</div>
+            </div>
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-accent">500+</div>
+              <div className="text-sm text-muted-foreground mt-1">Clientes Satisfechos</div>
+            </div>
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-accent">98%</div>
+              <div className="text-sm text-muted-foreground mt-1">Tasa de Éxito</div>
+            </div>
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-accent">24h</div>
+              <div className="text-sm text-muted-foreground mt-1">Respuesta Garantizada</div>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </section>
   )

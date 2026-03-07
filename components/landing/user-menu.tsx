@@ -63,12 +63,12 @@ export function UserMenu({ user, profile, isTransparent = false }: UserMenuProps
             Dashboard
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
+        {/* <DropdownMenuItem asChild>
           <Link href="/dashboard/wallet" className="cursor-pointer">
             <Wallet className="mr-2 h-4 w-4" />
             Billetera
           </Link>
-        </DropdownMenuItem>
+        </DropdownMenuItem> */}
         <DropdownMenuItem asChild>
           <Link href="/dashboard/settings" className="cursor-pointer">
             <Settings className="mr-2 h-4 w-4" />
